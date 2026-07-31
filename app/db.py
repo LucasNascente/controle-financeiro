@@ -6,7 +6,7 @@ def get_db_connection():
         host='127.0.0.1',           
         port=3306,                  
         user='root',                
-        password='ceub123456',  
+        password='Lucasnascente8@',  
         database='controle_financeiro'
     )
     return connection

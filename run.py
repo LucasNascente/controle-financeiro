@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, session, redirect, url_for
 from werkzeug.security import check_password_hash
 from app.db import get_db_connection
+import datetime  # Adicionamos para pegar a data atual
 
 app = Flask(__name__, template_folder='app/templates')
 app.secret_key = 'chave_super_secreta_financeiro' 
@@ -32,54 +33,69 @@ def login():
     else:
         return render_template('login.html', erro="E-mail ou senha incorretos!")
 
-# Dashboard
+# Dashboard (AGORA COM FILTRO DE DATA!)
 @app.route('/dashboard')
 def dashboard():
     if 'usuario_id' not in session:
         return redirect(url_for('index'))
         
     usuario_id = session['usuario_id']
+    
+    # --- SISTEMA DE FILTRO DE MÊS/ANO ---
+    hoje = datetime.date.today()
+    # Pega da URL se o usuário selecionou, senão usa o mês/ano de hoje
+    mes_selecionado = int(request.args.get('mes', hoje.month))
+    ano_selecionado = int(request.args.get('ano', hoje.year))
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # 1. Totais
+    # 1. Totais (Filtrados por Mês/Ano)
     cursor.execute("""
         SELECT tipo, SUM(valor) as total 
         FROM transacoes 
-        WHERE usuario_id = %s 
+        WHERE usuario_id = %s AND MONTH(data_transacao) = %s AND YEAR(data_transacao) = %s
         GROUP BY tipo
-    """, (usuario_id,))
+    """, (usuario_id, mes_selecionado, ano_selecionado))
     totais = cursor.fetchall()
     
-    total_receitas = 0
-    total_despesas = 0
+    total_receitas = 0.0
+    total_despesas = 0.0
     
     for t in totais:
-        if t['tipo'] == 'receita':
+        if t['tipo'] == 'receita' and t['total'] is not None:
             total_receitas = float(t['total'])
-        elif t['tipo'] == 'despesa':
+        elif t['tipo'] == 'despesa' and t['total'] is not None:
             total_despesas = float(t['total'])
             
     saldo_atual = total_receitas - total_despesas
 
-    # 2. Despesas por Categoria (Gráfico)
+    # 2. Despesas por Categoria (Gráfico Filtrado)
     cursor.execute("""
         SELECT c.nome, c.cor, SUM(t.valor) as total
         FROM transacoes t
         JOIN categorias c ON t.categoria_id = c.id
-        WHERE t.usuario_id = %s AND t.tipo = 'despesa'
-        GROUP BY c.id
-    """, (usuario_id,))
-    despesas_categoria = cursor.fetchall()
+        WHERE t.usuario_id = %s AND t.tipo = 'despesa' AND MONTH(t.data_transacao) = %s AND YEAR(t.data_transacao) = %s
+        GROUP BY c.id, c.nome, c.cor
+    """, (usuario_id, mes_selecionado, ano_selecionado))
+    despesas_raw = cursor.fetchall()
 
-    # 3. Busca todas as transações para a Tabela
+    grafico_dados = []
+    for d in despesas_raw:
+        grafico_dados.append({
+            'nome': str(d['nome']),
+            'cor': str(d['cor']) if d['cor'] else '#2563eb',
+            'total': float(d['total']) if d['total'] is not None else 0.0
+        })
+
+    # 3. Lista de Transações (Filtrada)
     cursor.execute("""
         SELECT t.id, t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
         FROM transacoes t
         JOIN categorias c ON t.categoria_id = c.id
-        WHERE t.usuario_id = %s
+        WHERE t.usuario_id = %s AND MONTH(t.data_transacao) = %s AND YEAR(t.data_transacao) = %s
         ORDER BY t.data_transacao DESC, t.id DESC
-    """, (usuario_id,))
+    """, (usuario_id, mes_selecionado, ano_selecionado))
     lista_transacoes = cursor.fetchall()
 
     cursor.close()
@@ -89,19 +105,51 @@ def dashboard():
                            receitas=total_receitas, 
                            despesas=total_despesas, 
                            saldo=saldo_atual,
-                           grafico_categorias=despesas_categoria,
-                           transacoes=lista_transacoes)
+                           grafico_categorias=grafico_dados,
+                           transacoes=lista_transacoes,
+                           mes_atual=mes_selecionado,
+                           ano_atual=ano_selecionado)
 
-# Nova Transação
+# --- O RESTANTE CONTINUA IGUAL ---
+
+@app.route('/categorias', methods=['GET', 'POST'])
+def categorias():
+    if 'usuario_id' not in session:
+        return redirect(url_for('index'))
+    usuario_id = session['usuario_id']
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    if request.method == 'POST':
+        nome = request.form['nome']
+        cor = request.form['cor']
+        cursor.execute("INSERT INTO categorias (usuario_id, nome, cor) VALUES (%s, %s, %s)", (usuario_id, nome, cor))
+        conn.commit()
+        return redirect(url_for('categorias'))
+    cursor.execute("SELECT * FROM categorias WHERE usuario_id = %s ORDER BY nome ASC", (usuario_id,))
+    minhas_categorias = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('categorias.html', categorias=minhas_categorias)
+
+@app.route('/deletar_categoria/<int:id>')
+def deletar_categoria(id):
+    if 'usuario_id' not in session:
+        return redirect(url_for('index'))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM categorias WHERE id = %s AND usuario_id = %s", (id, session['usuario_id']))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return redirect(url_for('categorias'))
+
 @app.route('/nova_transacao', methods=['GET', 'POST'])
 def nova_transacao():
     if 'usuario_id' not in session:
         return redirect(url_for('index'))
-        
     usuario_id = session['usuario_id']
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    
     if request.method == 'POST':
         descricao = request.form['descricao']
         valor = float(request.form['valor'].replace(',', '.'))
@@ -109,44 +157,65 @@ def nova_transacao():
         categoria_id = request.form['categoria_id']
         conta_id = request.form['conta_id']
         data_transacao = request.form['data_transacao']
-        
         cursor.execute("""
             INSERT INTO transacoes (usuario_id, categoria_id, conta_id, descricao, valor, tipo, data_transacao) 
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (usuario_id, categoria_id, conta_id, descricao, valor, tipo, data_transacao))
         conn.commit()
-        
-        cursor.close()
-        conn.close()
         return redirect(url_for('dashboard'))
-    
     cursor.execute("SELECT * FROM categorias WHERE usuario_id = %s", (usuario_id,))
     categorias = cursor.fetchall()
-    
     cursor.execute("SELECT * FROM contas WHERE usuario_id = %s", (usuario_id,))
     contas = cursor.fetchall()
-    
     cursor.close()
     conn.close()
-    
     return render_template('nova_transacao.html', categorias=categorias, contas=contas)
 
-# Deletar Transação
+@app.route('/editar_transacao/<int:id>', methods=['GET', 'POST'])
+def editar_transacao(id):
+    if 'usuario_id' not in session:
+        return redirect(url_for('index'))
+    usuario_id = session['usuario_id']
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    if request.method == 'POST':
+        descricao = request.form['descricao']
+        valor = float(request.form['valor'].replace(',', '.'))
+        tipo = request.form['tipo']
+        categoria_id = request.form['categoria_id']
+        conta_id = request.form['conta_id']
+        data_transacao = request.form['data_transacao']
+        cursor.execute("""
+            UPDATE transacoes 
+            SET descricao = %s, valor = %s, tipo = %s, categoria_id = %s, conta_id = %s, data_transacao = %s
+            WHERE id = %s AND usuario_id = %s
+        """, (descricao, valor, tipo, categoria_id, conta_id, data_transacao, id, usuario_id))
+        conn.commit()
+        return redirect(url_for('dashboard'))
+    cursor.execute("SELECT * FROM transacoes WHERE id = %s AND usuario_id = %s", (id, usuario_id))
+    transacao = cursor.fetchone()
+    if not transacao:
+        return redirect(url_for('dashboard'))
+    cursor.execute("SELECT * FROM categorias WHERE usuario_id = %s", (usuario_id,))
+    categorias = cursor.fetchall()
+    cursor.execute("SELECT * FROM contas WHERE usuario_id = %s", (usuario_id,))
+    contas = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('editar_transacao.html', transacao=transacao, categorias=categorias, contas=contas)
+
 @app.route('/deletar_transacao/<int:id>')
 def deletar_transacao(id):
     if 'usuario_id' not in session:
         return redirect(url_for('index'))
-        
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM transacoes WHERE id = %s AND usuario_id = %s", (id, session['usuario_id']))
     conn.commit()
     cursor.close()
     conn.close()
-    
     return redirect(url_for('dashboard'))
 
-# Logout
 @app.route('/logout')
 def logout():
     session.clear()
