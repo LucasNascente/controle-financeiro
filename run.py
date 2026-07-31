@@ -1,10 +1,23 @@
 from flask import Flask, render_template, request, session, redirect, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
 from app.db import get_db_connection
-import datetime  # Adicionamos para pegar a data atual
+import datetime
 
 app = Flask(__name__, template_folder='app/templates')
 app.secret_key = 'chave_super_secreta_financeiro' 
+
+# --- CONFIGURAÇÕES DO FLASK-MAIL (GMAIL) ---
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'nascenteandrade@gmail.com'
+app.config['MAIL_PASSWORD'] = 'xohepcqjwzzrslhu'  # Senha de App tratada sem espaços
+app.config['MAIL_DEFAULT_SENDER'] = ('Controle Financeiro', 'nascenteandrade@gmail.com')
+
+mail = Mail(app)
+s = URLSafeTimedSerializer(app.secret_key)
 
 # Rota Principal / Login
 @app.route('/')
@@ -47,7 +60,6 @@ def cadastro():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
-        # 1. Verificar se o e-mail já está cadastrado
         cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
         usuario_existente = cursor.fetchone()
         
@@ -56,10 +68,8 @@ def cadastro():
             conn.close()
             return render_template('cadastro.html', erro="Este e-mail já está cadastrado!")
             
-        # 2. Criptografar a senha com hash seguro
         senha_hash = generate_password_hash(senha)
         
-        # 3. Salvar o novo usuário no banco
         cursor.execute("""
             INSERT INTO usuarios (nome, email, senha, perfil) 
             VALUES (%s, %s, %s, %s)
@@ -68,7 +78,6 @@ def cadastro():
         
         novo_id = cursor.lastrowid
         
-        # 4. Criar categorias padrão para o novo usuário
         categorias_padrao = [
             ('Alimentação', '#ef4444'),
             ('Moradia', '#3b82f6'),
@@ -79,20 +88,17 @@ def cadastro():
         for cat_nome, cat_cor in categorias_padrao:
             cursor.execute("INSERT INTO categorias (usuario_id, nome, cor) VALUES (%s, %s, %s)", (novo_id, cat_nome, cat_cor))
             
-        # 5. Criar uma conta padrão (Carteira/Banco) para ele conseguir registrar transações
         cursor.execute("INSERT INTO contas (usuario_id, nome) VALUES (%s, %s)", (novo_id, 'Carteira Principal'))
         
         conn.commit()
         cursor.close()
         conn.close()
         
-        # Redireciona para o login com mensagem de sucesso
         return render_template('login.html', sucesso="Conta criada com sucesso! Faça seu login.")
         
     return render_template('cadastro.html')
 
-
-# --- NOVA ROTA: ESQUECI A SENHA ---
+# --- ROTA SOLICITAR RECUPERAÇÃO DE SENHA (ENVIA E-MAIL) ---
 @app.route('/esqueci-senha', methods=['GET', 'POST'])
 def esqueci_senha():
     if 'usuario_id' in session:
@@ -100,51 +106,87 @@ def esqueci_senha():
 
     if request.method == 'POST':
         email = request.form['email']
-        nova_senha = request.form['nova_senha']
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-
-        # 1. Verifica se o e-mail existe no sistema
         cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
         usuario = cursor.fetchone()
+        cursor.close()
+        conn.close()
 
         if not usuario:
-            cursor.close()
-            conn.close()
             return render_template('esqueci_senha.html', erro="E-mail não encontrado no sistema!")
 
-        # 2. Criptografa a nova senha e atualiza no banco
-        senha_hash = generate_password_hash(nova_senha)
-        cursor.execute("UPDATE usuarios SET senha = %s WHERE id = %s", (senha_hash, usuario['id']))
-        conn.commit()
+        # Gerar token criptografado
+        token = s.dumps(email, salt='recuperar-senha')
+        link_redefinicao = url_for('redefinir_senha_token', token=token, _external=True)
 
+        try:
+            msg = Message('Recuperação de Senha - Controle Financeiro', recipients=[email])
+            msg.body = f"""Olá, {usuario['nome']}!
+
+Recebemos uma solicitação para redefinir a senha da sua conta no Controle Financeiro.
+
+Para criar uma nova senha, clique no link abaixo:
+{link_redefinicao}
+
+Este link é válido por 30 minutos. Se você não solicitou a alteração de senha, pode ignorar esta mensagem.
+"""
+            mail.send(msg)
+            return render_template('esqueci_senha.html', sucesso="E-mail de recuperação enviado! Verifique sua caixa de entrada (ou spam).")
+        except Exception as e:
+            print("Erro ao enviar e-mail:", e)
+            return render_template('esqueci_senha.html', erro="Erro ao enviar o e-mail. Tente novamente mais tarde.")
+
+    return render_template('esqueci_senha.html')
+
+# --- ROTA REDEFINIR SENHA VIA TOKEN ---
+@app.route('/redefinir-senha/<token>', methods=['GET', 'POST'])
+def redefinir_senha_token(token):
+    if 'usuario_id' in session:
+        return redirect(url_for('dashboard'))
+
+    try:
+        # Token é válido por 30 minutos (1800 segundos)
+        email = s.loads(token, salt='recuperar-senha', max_age=1800)
+    except SignatureExpired:
+        return render_template('login.html', erro="O link de recuperação expirou! Solicite um novo.")
+    except BadTimeSignature:
+        return render_template('login.html', erro="Link de recuperação inválido!")
+
+    if request.method == 'POST':
+        nova_senha = request.form['nova_senha']
+        senha_hash = generate_password_hash(nova_senha)
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE usuarios SET senha = %s WHERE email = %s", (senha_hash, email))
+        conn.commit()
         cursor.close()
         conn.close()
 
         return render_template('login.html', sucesso="Senha redefinida com sucesso! Faça seu login.")
 
-    return render_template('esqueci_senha.html')
+    return render_template('redefinir_senha.html', token=token)
 
-
-# Dashboard (AGORA COM FILTRO DE DATA!)
+# --- DASHBOARD (Com filtro de Mês, Ano e Texto) ---
 @app.route('/dashboard')
 def dashboard():
     if 'usuario_id' not in session:
         return redirect(url_for('index'))
         
     usuario_id = session['usuario_id']
-    
-    # --- SISTEMA DE FILTRO DE MÊS/ANO ---
     hoje = datetime.date.today()
-    # Pega da URL se o usuário selecionou, senão usa o mês/ano de hoje
+    
+    # Filtros recebidos via URL (GET)
     mes_selecionado = int(request.args.get('mes', hoje.month))
     ano_selecionado = int(request.args.get('ano', hoje.year))
+    pesquisa = request.args.get('pesquisa', '') 
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # 1. Totais (Filtrados por Mês/Ano)
+    # Totais Receita/Despesa (Filtrado por mês/ano)
     cursor.execute("""
         SELECT tipo, SUM(valor) as total 
         FROM transacoes 
@@ -157,14 +199,14 @@ def dashboard():
     total_despesas = 0.0
     
     for t in totais:
-        if t['tipo'] == 'receita' and t['total'] is not None:
+        if t['tipo'] == 'receita' and t['total'] is not None: 
             total_receitas = float(t['total'])
-        elif t['tipo'] == 'despesa' and t['total'] is not None:
+        elif t['tipo'] == 'despesa' and t['total'] is not None: 
             total_despesas = float(t['total'])
             
     saldo_atual = total_receitas - total_despesas
 
-    # 2. Despesas por Categoria (Gráfico Filtrado)
+    # Gráfico (Apenas despesas)
     cursor.execute("""
         SELECT c.nome, c.cor, SUM(t.valor) as total
         FROM transacoes t
@@ -182,14 +224,23 @@ def dashboard():
             'total': float(d['total']) if d['total'] is not None else 0.0
         })
 
-    # 3. Lista de Transações (Filtrada)
-    cursor.execute("""
+    # Tabela com filtro de pesquisa de texto
+    query_transacoes = """
         SELECT t.id, t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
         FROM transacoes t
         JOIN categorias c ON t.categoria_id = c.id
         WHERE t.usuario_id = %s AND MONTH(t.data_transacao) = %s AND YEAR(t.data_transacao) = %s
-        ORDER BY t.data_transacao DESC, t.id DESC
-    """, (usuario_id, mes_selecionado, ano_selecionado))
+    """
+    params = [usuario_id, mes_selecionado, ano_selecionado]
+
+    # Se o usuário digitou algo na pesquisa, adicionamos ao filtro
+    if pesquisa:
+        query_transacoes += " AND t.descricao LIKE %s"
+        params.append(f"%{pesquisa}%")
+
+    query_transacoes += " ORDER BY t.data_transacao DESC, t.id DESC"
+    
+    cursor.execute(query_transacoes, params)
     lista_transacoes = cursor.fetchall()
 
     cursor.close()
@@ -204,6 +255,85 @@ def dashboard():
                            mes_atual=mes_selecionado,
                            ano_atual=ano_selecionado)
 
+# --- ROTAS DO PERFIL DO USUÁRIO ---
+@app.route('/perfil', methods=['GET', 'POST'])
+def perfil():
+    if 'usuario_id' not in session:
+        return redirect(url_for('index'))
+
+    usuario_id = session['usuario_id']
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    if request.method == 'POST' and 'atualizar_dados' in request.form:
+        novo_nome = request.form['nome']
+        cursor.execute("UPDATE usuarios SET nome = %s WHERE id = %s", (novo_nome, usuario_id))
+        conn.commit()
+        session['usuario_nome'] = novo_nome  
+        cursor.close()
+        conn.close()
+        return render_template('perfil.html', 
+                               usuario={'nome': novo_nome, 'email': request.form['email_exibicao']}, 
+                               sucesso_dados="Nome atualizado com sucesso!")
+
+    cursor.execute("SELECT id, nome, email FROM usuarios WHERE id = %s", (usuario_id,))
+    usuario = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    return render_template('perfil.html', usuario=usuario)
+
+@app.route('/perfil/alterar-senha', methods=['POST'])
+def alterar_senha_perfil():
+    if 'usuario_id' not in session:
+        return redirect(url_for('index'))
+
+    usuario_id = session['usuario_id']
+    senha_atual = request.form['senha_atual']
+    nova_senha = request.form['nova_senha']
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT senha, email, nome FROM usuarios WHERE id = %s", (usuario_id,))
+    usuario = cursor.fetchone()
+
+    if not check_password_hash(usuario['senha'], senha_atual):
+        cursor.close()
+        conn.close()
+        return render_template('perfil.html', usuario=usuario, erro_senha="A senha atual está incorreta!")
+
+    nova_senha_hash = generate_password_hash(nova_senha)
+    cursor.execute("UPDATE usuarios SET senha = %s WHERE id = %s", (nova_senha_hash, usuario_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return render_template('perfil.html', usuario=usuario, sucesso_senha="Senha alterada com sucesso!")
+
+@app.route('/perfil/excluir-conta', methods=['POST'])
+def excluir_conta():
+    if 'usuario_id' not in session:
+        return redirect(url_for('index'))
+
+    usuario_id = session['usuario_id']
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM transacoes WHERE usuario_id = %s", (usuario_id,))
+    cursor.execute("DELETE FROM categorias WHERE usuario_id = %s", (usuario_id,))
+    cursor.execute("DELETE FROM contas WHERE usuario_id = %s", (usuario_id,))
+    cursor.execute("DELETE FROM usuarios WHERE id = %s", (usuario_id,))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    session.clear()
+    return redirect(url_for('index'))
+
+# --- ROTAS DE CATEGORIAS E TRANSAÇÕES ---
 @app.route('/categorias', methods=['GET', 'POST'])
 def categorias():
     if 'usuario_id' not in session:

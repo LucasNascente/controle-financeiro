@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redefinir Senha - Controle Financeiro</title>
+    <title>Esqueci minha Senha - Controle Financeiro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -26,13 +26,19 @@
 
 <div class="card card-reset p-4 bg-white">
     <div class="text-center mb-4">
-        <h3 class="fw-bold text-primary">Redefinir Senha</h3>
-        <p class="text-muted small">Informe seu e-mail e escolha uma nova senha</p>
+        <h3 class="fw-bold text-primary">Recuperar Senha</h3>
+        <p class="text-muted small">Informe seu e-mail cadastrado para receber o link de redefinição</p>
     </div>
 
     {% if erro %}
         <div class="alert alert-danger py-2" role="alert">
             {{ erro }}
+        </div>
+    {% endif %}
+
+    {% if sucesso %}
+        <div class="alert alert-success py-2" role="alert">
+            {{ sucesso }}
         </div>
     {% endif %}
 
@@ -42,38 +48,13 @@
             <input type="email" name="email" class="form-control" placeholder="seu@email.com" required>
         </div>
 
-        <div class="mb-3">
-            <label class="form-label fw-semibold">Nova Senha</label>
-            <div class="input-group">
-                <input type="password" name="nova_senha" id="campoNovaSenha" class="form-control" placeholder="Digite a nova senha" required>
-                <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha('campoNovaSenha', 'iconeNovaSenha')">
-                    <span id="iconeNovaSenha">👁️</span>
-                </button>
-            </div>
-        </div>
-
-        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold mb-3">Alterar Senha</button>
+        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold mb-3">Enviar Link por E-mail</button>
 
         <div class="text-center">
             <a href="{{ url_for('index') }}" class="text-decoration-none small fw-semibold">Voltar para o Login</a>
         </div>
     </form>
 </div>
-
-<script>
-function toggleSenha(inputId, iconeId) {
-    const input = document.getElementById(inputId);
-    const icone = document.getElementById(iconeId);
-    
-    if (input.type === 'password') {
-        input.type = 'text';
-        icone.textContent = '🙈';
-    } else {
-        input.type = 'password';
-        icone.textContent = '👁️';
-    }
-}
-</script>
 
 </body>
 </html>
