@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, session, redirect, url_for
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from app.db import get_db_connection
 import datetime  # Adicionamos para pegar a data atual
 
@@ -32,6 +32,100 @@ def login():
         return redirect(url_for('dashboard'))
     else:
         return render_template('login.html', erro="E-mail ou senha incorretos!")
+
+# Rota de Cadastro de Novos Usuários
+@app.route('/cadastro', methods=['GET', 'POST'])
+def cadastro():
+    if 'usuario_id' in session:
+        return redirect(url_for('dashboard'))
+        
+    if request.method == 'POST':
+        nome = request.form['nome']
+        email = request.form['email']
+        senha = request.form['senha']
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Verificar se o e-mail já está cadastrado
+        cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
+        usuario_existente = cursor.fetchone()
+        
+        if usuario_existente:
+            cursor.close()
+            conn.close()
+            return render_template('cadastro.html', erro="Este e-mail já está cadastrado!")
+            
+        # 2. Criptografar a senha com hash seguro
+        senha_hash = generate_password_hash(senha)
+        
+        # 3. Salvar o novo usuário no banco
+        cursor.execute("""
+            INSERT INTO usuarios (nome, email, senha, perfil) 
+            VALUES (%s, %s, %s, %s)
+        """, (nome, email, senha_hash, 'comum'))
+        conn.commit()
+        
+        novo_id = cursor.lastrowid
+        
+        # 4. Criar categorias padrão para o novo usuário
+        categorias_padrao = [
+            ('Alimentação', '#ef4444'),
+            ('Moradia', '#3b82f6'),
+            ('Transporte', '#f59e0b'),
+            ('Lazer', '#8b5cf6'),
+            ('Salário / Receita', '#10b981')
+        ]
+        for cat_nome, cat_cor in categorias_padrao:
+            cursor.execute("INSERT INTO categorias (usuario_id, nome, cor) VALUES (%s, %s, %s)", (novo_id, cat_nome, cat_cor))
+            
+        # 5. Criar uma conta padrão (Carteira/Banco) para ele conseguir registrar transações
+        cursor.execute("INSERT INTO contas (usuario_id, nome) VALUES (%s, %s)", (novo_id, 'Carteira Principal'))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Redireciona para o login com mensagem de sucesso
+        return render_template('login.html', sucesso="Conta criada com sucesso! Faça seu login.")
+        
+    return render_template('cadastro.html')
+
+
+# --- NOVA ROTA: ESQUECI A SENHA ---
+@app.route('/esqueci-senha', methods=['GET', 'POST'])
+def esqueci_senha():
+    if 'usuario_id' in session:
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        email = request.form['email']
+        nova_senha = request.form['nova_senha']
+
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Verifica se o e-mail existe no sistema
+        cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
+        usuario = cursor.fetchone()
+
+        if not usuario:
+            cursor.close()
+            conn.close()
+            return render_template('esqueci_senha.html', erro="E-mail não encontrado no sistema!")
+
+        # 2. Criptografa a nova senha e atualiza no banco
+        senha_hash = generate_password_hash(nova_senha)
+        cursor.execute("UPDATE usuarios SET senha = %s WHERE id = %s", (senha_hash, usuario['id']))
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return render_template('login.html', sucesso="Senha redefinida com sucesso! Faça seu login.")
+
+    return render_template('esqueci_senha.html')
+
 
 # Dashboard (AGORA COM FILTRO DE DATA!)
 @app.route('/dashboard')
@@ -109,8 +203,6 @@ def dashboard():
                            transacoes=lista_transacoes,
                            mes_atual=mes_selecionado,
                            ano_atual=ano_selecionado)
-
-# --- O RESTANTE CONTINUA IGUAL ---
 
 @app.route('/categorias', methods=['GET', 'POST'])
 def categorias():

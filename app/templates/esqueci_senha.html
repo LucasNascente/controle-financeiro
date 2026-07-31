@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Controle Financeiro</title>
+    <title>Redefinir Senha - Controle Financeiro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -13,7 +13,7 @@
             justify-content: center;
             min-height: 100vh;
         }
-        .card-login {
+        .card-reset {
             max-width: 400px;
             width: 100%;
             border: none;
@@ -24,10 +24,10 @@
 </head>
 <body>
 
-<div class="card card-login p-4 bg-white">
+<div class="card card-reset p-4 bg-white">
     <div class="text-center mb-4">
-        <h3 class="fw-bold text-primary">MyFinance</h3>
-        <p class="text-muted small">Faça login para aceder à sua conta</p>
+        <h3 class="fw-bold text-primary">Redefinir Senha</h3>
+        <p class="text-muted small">Informe seu e-mail e escolha uma nova senha</p>
     </div>
 
     {% if erro %}
@@ -36,36 +36,26 @@
         </div>
     {% endif %}
 
-    {% if sucesso %}
-        <div class="alert alert-success py-2" role="alert">
-            {{ sucesso }}
-        </div>
-    {% endif %}
-
-    <form action="{{ url_for('login') }}" method="POST">
+    <form action="{{ url_for('esqueci_senha') }}" method="POST">
         <div class="mb-3">
-            <label class="form-label fw-semibold">E-mail</label>
+            <label class="form-label fw-semibold">E-mail Cadastrado</label>
             <input type="email" name="email" class="form-control" placeholder="seu@email.com" required>
         </div>
 
         <div class="mb-3">
-            <label class="form-label fw-semibold">Senha</label>
+            <label class="form-label fw-semibold">Nova Senha</label>
             <div class="input-group">
-                <input type="password" name="senha" id="campoSenhaLogin" class="form-control" placeholder="Digite a sua senha" required>
-                <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha('campoSenhaLogin', 'iconeSenhaLogin')">
-                    <span id="iconeSenhaLogin">👁️</span>
+                <input type="password" name="nova_senha" id="campoNovaSenha" class="form-control" placeholder="Digite a nova senha" required>
+                <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha('campoNovaSenha', 'iconeNovaSenha')">
+                    <span id="iconeNovaSenha">👁️</span>
                 </button>
-            </div>
-            <div class="text-end mt-1">
-                <a href="{{ url_for('esqueci_senha') }}" class="text-decoration-none small text-muted">Esqueci-me da senha</a>
             </div>
         </div>
 
-        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold mb-3">Entrar</button>
+        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold mb-3">Alterar Senha</button>
 
         <div class="text-center">
-            <span class="text-muted small">Ainda não tem conta?</span>
-            <a href="{{ url_for('cadastro') }}" class="text-decoration-none small fw-semibold">Criar Conta</a>
+            <a href="{{ url_for('index') }}" class="text-decoration-none small fw-semibold">Voltar para o Login</a>
         </div>
     </form>
 </div>
