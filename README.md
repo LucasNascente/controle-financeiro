@@ -11,13 +11,6 @@ Aplicação web para controle financeiro pessoal, desenvolvida em **Python** com
 - [Estrutura do projeto](#-estrutura-do-projeto)
 - [Pré-requisitos](#-pré-requisitos)
 - [Instalação e configuração](#-instalação-e-configuração)
-- [Variáveis de ambiente](#-variáveis-de-ambiente)
-- [Esquema do banco de dados (inferido)](#-esquema-do-banco-de-dados-inferido)
-- [Executando a aplicação](#-executando-a-aplicação)
-- [Rotas da aplicação](#-rotas-da-aplicação)
-- [Segurança](#-segurança)
-- [Limitações conhecidas e melhorias sugeridas](#-limitações-conhecidas-e-melhorias-sugeridas)
-- [Licença](#-licença)
 
 ---
 
