@@ -41,7 +41,9 @@
     <div class="card card-custom p-3 bg-white mb-4">
         <form method="GET" action="{{ url_for('dashboard') }}" class="row g-3 align-items-center">
             <div class="col-md-3">
-                <select name="mes" class="form-select">
+                <label class="form-label fw-bold text-muted mb-1 fs-7">MÊS</label>
+                <select name="mes" class="form-select" onchange="this.form.submit()">
+                    <option value="0" {% if mes_atual == 0 %}selected{% endif %}>🗓️ Todos os Meses</option>
                     {% set meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'] %}
                     {% for m in range(1, 13) %}
                         <option value="{{ m }}" {% if m == mes_atual %}selected{% endif %}>{{ meses[m-1] }}</option>
@@ -49,17 +51,19 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <select name="ano" class="form-select">
+                <label class="form-label fw-bold text-muted mb-1 fs-7">ANO</label>
+                <select name="ano" class="form-select" onchange="this.form.submit()">
                     {% for a in range(2024, 2030) %}
                         <option value="{{ a }}" {% if a == ano_atual %}selected{% endif %}>{{ a }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
-                <input type="text" name="pesquisa" class="form-control" placeholder="🔍 Pesquisar descrição..." value="{{ request.args.get('pesquisa', '') }}">
+            <div class="col-md-5">
+                <label class="form-label fw-bold text-muted mb-1 fs-7">BUSCA</label>
+                <input type="text" name="pesquisa" class="form-control" placeholder="🔍 Pesquisar por descrição..." value="{{ request.args.get('pesquisa', '') }}">
             </div>
-            <div class="col-md-3">
-                <button type="submit" class="btn btn-primary w-100 fw-semibold">Filtrar / Pesquisar</button>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100 fw-semibold mt-4">Buscar</button>
             </div>
         </form>
     </div>
@@ -89,20 +93,28 @@
         <div class="col-md-8">
             <div class="card card-custom p-4 bg-white h-100">
                 <h5 class="fw-bold mb-3">Despesas por Categoria</h5>
-                <div style="height: 250px;"><canvas id="meuGrafico"></canvas></div>
+                {% if grafico_categorias %}
+                    <div style="height: 250px;"><canvas id="meuGrafico"></canvas></div>
+                {% else %}
+                    <p class="text-muted my-auto text-center py-4">Nenhuma despesa registrada para este período.</p>
+                {% endif %}
             </div>
         </div>
         <div class="col-md-4">
             <div class="card card-custom p-4 bg-white h-100 d-flex flex-column justify-content-center gap-3">
                 <a href="{{ url_for('nova_transacao') }}" class="btn btn-success py-2 fw-semibold">+ Nova Transação</a>
-                <a href="{{ url_for('categorias') }}" class="btn btn-outline-primary py-2 fw-semibold">Categorias</a>
+                <a href="{{ url_for('categorias') }}" class="btn btn-outline-primary py-2 fw-semibold">Gerenciar Categorias</a>
             </div>
         </div>
     </div>
 
-    <div class="card card-custom p-4 bg-white">
-        <h5 class="fw-bold mb-3">Histórico de Transações</h5>
-        <div class="table-responsive">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0">Histórico de Transações</h5>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('exportar_excel', mes=mes_atual, ano=ano_atual) }}" class="btn btn-sm btn-outline-success fw-semibold">📊 Baixar Excel</a>
+            <a href="{{ url_for('extrato', mes=mes_atual, ano=ano_atual) }}" target="_blank" class="btn btn-sm btn-outline-dark fw-semibold">📄 Gerar Extrato (PDF)</a>
+        </div>
+    </div>
             <table class="table table-hover align-middle">
                 <thead class="table-light">
                     <tr>
@@ -124,8 +136,12 @@
                         </td>
                         <td class="text-end">
                             <a href="{{ url_for('editar_transacao', id=t.id) }}" class="btn btn-sm btn-outline-warning">✏️</a>
-                            <a href="{{ url_for('deletar_transacao', id=t.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir?')">🗑️</a>
+                            <a href="{{ url_for('deletar_transacao', id=t.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Tem certeza que deseja excluir esta transação?')">🗑️</a>
                         </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-3">Nenhuma transação encontrada para os filtros selecionados.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

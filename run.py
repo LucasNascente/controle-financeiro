@@ -1,19 +1,26 @@
-from flask import Flask, render_template, request, session, redirect, url_for
+import os
+import csv
+import io
+import datetime
+from dotenv import load_dotenv
+from flask import Flask, render_template, request, session, redirect, url_for, Response
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
 from app.db import get_db_connection
-import datetime
+
+# Isso avisa o Python para ler o arquivo .env
+load_dotenv()
 
 app = Flask(__name__, template_folder='app/templates')
-app.secret_key = 'chave_super_secreta_financeiro' 
+app.secret_key = 'e7Py$qFdYcfpcXUt8&99zucm2aiR*TDEwN$eeusjWB2jfaNqVx' 
 
 # --- CONFIGURAÇÕES DO FLASK-MAIL (GMAIL) ---
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = 'nascenteandrade@gmail.com'
-app.config['MAIL_PASSWORD'] = 'xohepcqjwzzrslhu'  # Senha de App tratada sem espaços
+app.config['MAIL_PASSWORD'] = 'xohepcqjwzzrslhu' 
 app.config['MAIL_DEFAULT_SENDER'] = ('Controle Financeiro', 'nascenteandrade@gmail.com')
 
 mail = Mail(app)
@@ -117,7 +124,6 @@ def esqueci_senha():
         if not usuario:
             return render_template('esqueci_senha.html', erro="E-mail não encontrado no sistema!")
 
-        # Gerar token criptografado
         token = s.dumps(email, salt='recuperar-senha')
         link_redefinicao = url_for('redefinir_senha_token', token=token, _external=True)
 
@@ -147,7 +153,6 @@ def redefinir_senha_token(token):
         return redirect(url_for('dashboard'))
 
     try:
-        # Token é válido por 30 minutos (1800 segundos)
         email = s.loads(token, salt='recuperar-senha', max_age=1800)
     except SignatureExpired:
         return render_template('login.html', erro="O link de recuperação expirou! Solicite um novo.")
@@ -169,7 +174,7 @@ def redefinir_senha_token(token):
 
     return render_template('redefinir_senha.html', token=token)
 
-# --- DASHBOARD (Com filtro de Mês, Ano e Texto) ---
+# --- DASHBOARD (Filtro Suporta Mês Específico OU "0" Para Todos os Meses) ---
 @app.route('/dashboard')
 def dashboard():
     if 'usuario_id' not in session:
@@ -178,26 +183,33 @@ def dashboard():
     usuario_id = session['usuario_id']
     hoje = datetime.date.today()
     
-    # Filtros recebidos via URL (GET)
+    # Se 'mes' não for informado na URL, busca o mês atual. 
+    # Se 'mes' for 0, busca TODOS OS MESES.
     mes_selecionado = int(request.args.get('mes', hoje.month))
     ano_selecionado = int(request.args.get('ano', hoje.year))
-    pesquisa = request.args.get('pesquisa', '') 
+    pesquisa = request.args.get('pesquisa', '').strip()
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Totais Receita/Despesa (Filtrado por mês/ano)
-    cursor.execute("""
-        SELECT tipo, SUM(valor) as total 
-        FROM transacoes 
-        WHERE usuario_id = %s AND MONTH(data_transacao) = %s AND YEAR(data_transacao) = %s
-        GROUP BY tipo
-    """, (usuario_id, mes_selecionado, ano_selecionado))
+    # 1. Totais Receita/Despesa
+    query_totais = "SELECT tipo, SUM(valor) as total FROM transacoes WHERE usuario_id = %s"
+    params_totais = [usuario_id]
+
+    if mes_selecionado > 0:
+        query_totais += " AND MONTH(data_transacao) = %s"
+        params_totais.append(mes_selecionado)
+        
+    if ano_selecionado > 0:
+        query_totais += " AND YEAR(data_transacao) = %s"
+        params_totais.append(ano_selecionado)
+
+    query_totais += " GROUP BY tipo"
+    cursor.execute(query_totais, params_totais)
     totais = cursor.fetchall()
     
     total_receitas = 0.0
     total_despesas = 0.0
-    
     for t in totais:
         if t['tipo'] == 'receita' and t['total'] is not None: 
             total_receitas = float(t['total'])
@@ -206,14 +218,25 @@ def dashboard():
             
     saldo_atual = total_receitas - total_despesas
 
-    # Gráfico (Apenas despesas)
-    cursor.execute("""
+    # 2. Dados do Gráfico (Despesas)
+    query_grafico = """
         SELECT c.nome, c.cor, SUM(t.valor) as total
         FROM transacoes t
         JOIN categorias c ON t.categoria_id = c.id
-        WHERE t.usuario_id = %s AND t.tipo = 'despesa' AND MONTH(t.data_transacao) = %s AND YEAR(t.data_transacao) = %s
-        GROUP BY c.id, c.nome, c.cor
-    """, (usuario_id, mes_selecionado, ano_selecionado))
+        WHERE t.usuario_id = %s AND t.tipo = 'despesa'
+    """
+    params_grafico = [usuario_id]
+
+    if mes_selecionado > 0:
+        query_grafico += " AND MONTH(t.data_transacao) = %s"
+        params_grafico.append(mes_selecionado)
+        
+    if ano_selecionado > 0:
+        query_grafico += " AND YEAR(t.data_transacao) = %s"
+        params_grafico.append(ano_selecionado)
+
+    query_grafico += " GROUP BY c.id, c.nome, c.cor"
+    cursor.execute(query_grafico, params_grafico)
     despesas_raw = cursor.fetchall()
 
     grafico_dados = []
@@ -224,23 +247,29 @@ def dashboard():
             'total': float(d['total']) if d['total'] is not None else 0.0
         })
 
-    # Tabela com filtro de pesquisa de texto
+    # 3. Tabela de Transações
     query_transacoes = """
         SELECT t.id, t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
         FROM transacoes t
         JOIN categorias c ON t.categoria_id = c.id
-        WHERE t.usuario_id = %s AND MONTH(t.data_transacao) = %s AND YEAR(t.data_transacao) = %s
+        WHERE t.usuario_id = %s
     """
-    params = [usuario_id, mes_selecionado, ano_selecionado]
+    params_transacoes = [usuario_id]
 
-    # Se o usuário digitou algo na pesquisa, adicionamos ao filtro
+    if mes_selecionado > 0:
+        query_transacoes += " AND MONTH(t.data_transacao) = %s"
+        params_transacoes.append(mes_selecionado)
+
+    if ano_selecionado > 0:
+        query_transacoes += " AND YEAR(t.data_transacao) = %s"
+        params_transacoes.append(ano_selecionado)
+
     if pesquisa:
         query_transacoes += " AND t.descricao LIKE %s"
-        params.append(f"%{pesquisa}%")
+        params_transacoes.append(f"%{pesquisa}%")
 
     query_transacoes += " ORDER BY t.data_transacao DESC, t.id DESC"
-    
-    cursor.execute(query_transacoes, params)
+    cursor.execute(query_transacoes, params_transacoes)
     lista_transacoes = cursor.fetchall()
 
     cursor.close()
@@ -442,6 +471,124 @@ def deletar_transacao(id):
 def logout():
     session.clear()
     return redirect(url_for('index'))
+
+# --- ROTA DE EXTRATO (IMPRESSÃO / PDF) ---
+@app.route('/extrato')
+def extrato():
+    if 'usuario_id' not in session:
+        return redirect(url_for('index'))
+
+    usuario_id = session['usuario_id']
+    mes_selecionado = int(request.args.get('mes', 0))
+    ano_selecionado = int(request.args.get('ano', 0))
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Buscar dados do usuário para o cabeçalho
+    cursor.execute("SELECT nome, email FROM usuarios WHERE id = %s", (usuario_id,))
+    usuario = cursor.fetchone()
+
+    # Montar a consulta de transações baseada nos filtros
+    query = """
+        SELECT t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
+        FROM transacoes t
+        JOIN categorias c ON t.categoria_id = c.id
+        WHERE t.usuario_id = %s
+    """
+    params = [usuario_id]
+
+    if mes_selecionado > 0:
+        query += " AND MONTH(t.data_transacao) = %s"
+        params.append(mes_selecionado)
+    if ano_selecionado > 0:
+        query += " AND YEAR(t.data_transacao) = %s"
+        params.append(ano_selecionado)
+
+    # Ordenar por data cronológica crescente (melhor para leitura de extrato)
+    query += " ORDER BY t.data_transacao ASC" 
+    cursor.execute(query, params)
+    transacoes = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+
+    # Calcular Totais
+    total_receitas = sum(t['valor'] for t in transacoes if t['tipo'] == 'receita')
+    total_despesas = sum(t['valor'] for t in transacoes if t['tipo'] == 'despesa')
+    saldo = total_receitas - total_despesas
+
+    # Formatar o texto do período
+    meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+    periodo = "Todos os Meses"
+    if mes_selecionado > 0 and ano_selecionado > 0:
+        periodo = f"{meses[mes_selecionado-1]} de {ano_selecionado}"
+
+    data_atual = datetime.datetime.now().strftime('%d/%m/%Y às %H:%M')
+
+    return render_template('extrato.html', 
+                           transacoes=transacoes, 
+                           receitas=total_receitas,
+                           despesas=total_despesas, 
+                           saldo=saldo, 
+                           periodo=periodo,
+                           usuario=usuario,
+                           data_atual=data_atual)
+
+# --- ROTA EXPORTAR PARA EXCEL (CSV) ---
+@app.route('/exportar-excel')
+def exportar_excel():
+    if 'usuario_id' not in session:
+        return redirect(url_for('index'))
+
+    usuario_id = session['usuario_id']
+    mes_selecionado = int(request.args.get('mes', 0))
+    ano_selecionado = int(request.args.get('ano', 0))
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    query = """
+        SELECT t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
+        FROM transacoes t
+        JOIN categorias c ON t.categoria_id = c.id
+        WHERE t.usuario_id = %s
+    """
+    params = [usuario_id]
+
+    if mes_selecionado > 0:
+        query += " AND MONTH(t.data_transacao) = %s"
+        params.append(mes_selecionado)
+    if ano_selecionado > 0:
+        query += " AND YEAR(t.data_transacao) = %s"
+        params.append(ano_selecionado)
+
+    query += " ORDER BY t.data_transacao ASC"
+    cursor.execute(query, params)
+    transacoes = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+
+    # Criar o arquivo CSV na memória
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=';') # Ponto e Vírgula (padrão do Excel BR)
+
+    # Escrever Cabeçalho
+    writer.writerow(['Data', 'Descricao', 'Categoria', 'Tipo', 'Valor (R$)'])
+
+    # Escrever as linhas
+    for t in transacoes:
+        valor_formatado = f"{t['valor']:.2f}".replace('.', ',')
+        writer.writerow([t['data_f'], t['descricao'], t['categoria'], t['tipo'].capitalize(), valor_formatado])
+
+    # Preparar a resposta de download
+    output.seek(0)
+    return Response(
+        output.getvalue().encode('utf-8-sig'), # utf-8-sig preserva acentos no Excel
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=relatorio_financeiro.csv"}
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)
