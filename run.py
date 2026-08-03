@@ -255,7 +255,7 @@ def dashboard():
 
         # 3. Tabela de Transações
         query_transacoes = """
-            SELECT t.id, t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
+            SELECT t.id, t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria, c.cor as categoria_cor
             FROM transacoes t
             JOIN categorias c ON t.categoria_id = c.id
             WHERE t.usuario_id = %s

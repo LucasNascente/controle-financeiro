@@ -3,76 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Criar Conta - Controle Financeiro</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #f8fafc;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-        .card-cadastro {
-            max-width: 400px;
-            width: 100%;
-            border: none;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-        }
-    </style>
+    <title>Criar conta · Controle Financeiro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 </head>
 <body>
+<div class="auth-shell">
+    <div class="auth-card">
+        <div class="auth-brand"><span class="dot"></span> Controle Financeiro</div>
+        <p class="auth-sub">Crie sua conta para começar a organizar suas finanças.</p>
 
-<div class="card card-cadastro p-4 bg-white">
-    <div class="text-center mb-4">
-        <h3 class="fw-bold text-primary">Criar Nova Conta</h3>
-        <p class="text-muted small">Registe-se para gerir as suas finanças</p>
-    </div>
+        {% if erro %}<div class="alert alert-error">{{ erro }}</div>{% endif %}
 
-    {% if erro %}
-        <div class="alert alert-danger py-2" role="alert">
-            {{ erro }}
-        </div>
-    {% endif %}
+        <form action="{{ url_for('cadastro') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
-    <form action="{{ url_for('cadastro') }}" method="POST">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-
-        <div class="mb-3">
-            <label class="form-label fw-semibold">Nome Completo</label>
-            <input type="text" name="nome" class="form-control" placeholder="O seu nome" required>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label fw-semibold">E-mail</label>
-            <input type="email" name="email" class="form-control" placeholder="seu@email.com" required>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label fw-semibold">Senha</label>
-            <div class="input-group">
-                <input type="password" name="senha" id="campoSenhaCad" class="form-control" placeholder="Crie uma senha segura" required>
-                <button class="btn btn-outline-secondary" type="button" onclick="toggleSenha('campoSenhaCad', 'iconeSenhaCad')">
-                    <span id="iconeSenhaCad">👁️</span>
-                </button>
+            <div class="auth-field">
+                <label>Nome completo</label>
+                <input type="text" name="nome" placeholder="Seu nome" required>
             </div>
-        </div>
 
-        <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold mb-3">Cadastrar</button>
+            <div class="auth-field">
+                <label>E-mail</label>
+                <input type="email" name="email" placeholder="voce@email.com" required>
+            </div>
 
-        <div class="text-center">
-            <span class="text-muted small">Já tem uma conta?</span>
-            <a href="{{ url_for('index') }}" class="text-decoration-none small fw-semibold">Fazer Login</a>
+            <div class="auth-field">
+                <label>Senha</label>
+                <div style="position:relative;">
+                    <input type="password" name="senha" id="campoSenhaCad" placeholder="Crie uma senha segura" required style="width:100%; padding-right:44px;">
+                    <button type="button" onclick="toggleSenha('campoSenhaCad', 'iconeSenhaCad')"
+                        style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:15px;">
+                        <span id="iconeSenhaCad">👁️</span>
+                    </button>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary auth-submit">Cadastrar</button>
+        </form>
+
+        <div class="auth-links" style="justify-content:center;">
+            <span style="color:var(--text-faint);">Já tem uma conta?&nbsp;</span><a href="{{ url_for('index') }}">Fazer login</a>
         </div>
-    </form>
+    </div>
 </div>
 
 <script>
 function toggleSenha(inputId, iconeId) {
     const input = document.getElementById(inputId);
     const icone = document.getElementById(iconeId);
-    
     if (input.type === 'password') {
         input.type = 'text';
         icone.textContent = '🙈';
@@ -82,6 +62,5 @@ function toggleSenha(inputId, iconeId) {
     }
 }
 </script>
-
 </body>
 </html>

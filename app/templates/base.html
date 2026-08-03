@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Controle Financeiro{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+<div class="mobile-topbar">
+    <div class="sidebar-brand"><span class="dot"></span> Controle Financeiro</div>
+    <button class="hamburger-btn" id="btnAbrirMenu" aria-label="Abrir menu" onclick="document.getElementById('sidebarApp').classList.add('open'); document.getElementById('sidebarBackdrop').classList.add('open');">☰</button>
+</div>
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="document.getElementById('sidebarApp').classList.remove('open'); this.classList.remove('open');"></div>
+
+<div class="app-shell">
+    <aside class="sidebar" id="sidebarApp">
+        <div class="sidebar-brand"><span class="dot"></span> Controle Financeiro</div>
+
+        <nav class="nav-group">
+            <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                <span class="icon">&#9701;</span> Dashboard
+            </a>
+            <a class="nav-link {% if active_page == 'nova_transacao' %}active{% endif %}" href="{{ url_for('nova_transacao') }}">
+                <span class="icon">+</span> Nova transação
+            </a>
+            <a class="nav-link {% if active_page == 'categorias' %}active{% endif %}" href="{{ url_for('categorias') }}">
+                <span class="icon">&#9671;</span> Categorias
+            </a>
+            <a class="nav-link {% if active_page == 'perfil' %}active{% endif %}" href="{{ url_for('perfil') }}">
+                <span class="icon">&#9678;</span> Perfil
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="user-chip">
+                <div class="avatar">{{ (session.get('usuario_nome') or '?')[0]|upper }}</div>
+                <div style="flex:1; min-width:0;">
+                    <div class="name">{{ session.get('usuario_nome') }}</div>
+                    <a class="logout" href="{{ url_for('logout') }}">Sair</a>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

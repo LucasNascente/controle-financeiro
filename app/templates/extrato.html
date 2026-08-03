@@ -3,60 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extrato - MyFinance</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Extrato · Controle Financeiro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body { background-color: #fff; color: #000; font-family: Arial, sans-serif; }
-        .cabecalho-extrato { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-        .tabela-extrato th { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        
-        /* Esconde os botões de navegação na hora de gerar o PDF/Imprimir */
+        :root {
+            --ink: #14161C;
+            --ink-soft: #5B6272;
+            --line: #DDE1E8;
+            --positive: #0F9D6E;
+            --negative: #D63A3A;
+            --accent: #6D28D9;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: #F4F5F7;
+            color: var(--ink);
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+        }
+        .sheet {
+            max-width: 840px;
+            margin: 32px auto;
+            background: #fff;
+            padding: 48px;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+        }
+        .toolbar {
+            max-width: 840px;
+            margin: 0 auto 12px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .btn {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            border-radius: 8px;
+            padding: 9px 16px;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .btn-dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+        .head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 2px solid var(--ink);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+        .brand {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+        .meta { color: var(--ink-soft); font-size: 12.5px; margin-top: 4px; }
+        .meta strong { color: var(--ink); }
+        .gen-at { color: var(--ink-soft); font-size: 11.5px; text-align: right; }
+
+        .summary {
+            display: flex;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            margin-bottom: 28px;
+        }
+        .summary-item { flex: 1; padding: 16px 20px; border-right: 1px solid var(--line); }
+        .summary-item:last-child { border-right: none; }
+        .summary-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10.5px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--ink-soft);
+            margin-bottom: 6px;
+        }
+        .summary-value { font-family: 'JetBrains Mono', monospace; font-size: 19px; font-weight: 500; }
+        .summary-value.positive { color: var(--positive); }
+        .summary-value.negative { color: var(--negative); }
+
+        h3.section-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            margin: 0 0 12px;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        thead th {
+            text-align: left;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10.5px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--ink-soft);
+            padding: 0 10px 10px;
+            border-bottom: 1px solid var(--ink);
+        }
+        tbody td { padding: 10px; border-bottom: 1px solid var(--line); }
+        .num { font-family: 'JetBrains Mono', monospace; text-align: right; }
+        .num.positive { color: var(--positive); }
+        .num.negative { color: var(--negative); }
+        .empty { text-align: center; color: var(--ink-soft); padding: 30px 0; }
+        .footer-note { text-align: center; color: var(--ink-soft); font-size: 12px; margin-top: 36px; }
+
         @media print {
-            .no-print { display: none !important; }
+            body { background: #fff; }
+            .toolbar { display: none !important; }
+            .sheet { box-shadow: none; margin: 0; max-width: 100%; }
         }
     </style>
 </head>
-<body class="p-4">
+<body>
 
-    <div class="text-end mb-4 no-print">
-        <button onclick="window.print()" class="btn btn-dark fw-bold px-4">🖨️ Imprimir / Salvar PDF</button>
-        <a href="{{ url_for('dashboard') }}" onclick="window.close();" class="btn btn-outline-secondary ms-2">Fechar / Voltar</a>
-    </div>
+<div class="toolbar">
+    <button onclick="window.print()" class="btn btn-dark">🖨️ Imprimir / Salvar PDF</button>
+    <a href="{{ url_for('dashboard') }}" class="btn">Fechar / Voltar</a>
+</div>
 
-    <div class="cabecalho-extrato d-flex justify-content-between align-items-end">
+<div class="sheet">
+    <div class="head">
         <div>
-            <h2 class="fw-bold mb-0">💰 MyFinance - Extrato de Conta</h2>
-            <p class="mb-0 mt-2 text-muted"><strong>Titular:</strong> {{ usuario.nome }} ({{ usuario.email }})</p>
-            <p class="mb-0 text-muted"><strong>Período:</strong> {{ periodo }}</p>
+            <div class="brand"><span class="dot"></span> Controle Financeiro</div>
+            <p class="meta"><strong>Titular:</strong> {{ usuario.nome }} ({{ usuario.email }})</p>
+            <p class="meta"><strong>Período:</strong> {{ periodo }}</p>
         </div>
-        <div class="text-end">
-            <small class="text-muted">Gerado em: {{ data_atual }}</small>
+        <div class="gen-at">Gerado em {{ data_atual }}</div>
+    </div>
+
+    <div class="summary">
+        <div class="summary-item">
+            <div class="summary-label">Total de entradas</div>
+            <div class="summary-value positive">+ R$ {{ "%.2f"|format(receitas) }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Total de saídas</div>
+            <div class="summary-value negative">− R$ {{ "%.2f"|format(despesas) }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Saldo do período</div>
+            <div class="summary-value {% if saldo < 0 %}negative{% endif %}">R$ {{ "%.2f"|format(saldo) }}</div>
         </div>
     </div>
 
-    <div class="row text-center mb-4 border py-3 rounded bg-light">
-        <div class="col-4">
-            <span class="d-block text-muted fw-bold">TOTAL DE ENTRADAS</span>
-            <span class="fs-5 text-success fw-bold">+ R$ {{ "%.2f"|format(receitas) }}</span>
-        </div>
-        <div class="col-4 border-start border-end">
-            <span class="d-block text-muted fw-bold">TOTAL DE SAÍDAS</span>
-            <span class="fs-5 text-danger fw-bold">- R$ {{ "%.2f"|format(despesas) }}</span>
-        </div>
-        <div class="col-4">
-            <span class="d-block text-muted fw-bold">SALDO DO PERÍODO</span>
-            <span class="fs-5 fw-bold {% if saldo >= 0 %}text-primary{% else %}text-danger{% endif %}">R$ {{ "%.2f"|format(saldo) }}</span>
-        </div>
-    </div>
-
-    <h5 class="fw-bold mb-3">Lançamentos</h5>
-    <table class="table tabela-extrato table-bordered align-middle">
+    <h3 class="section-title">Lançamentos</h3>
+    <table>
         <thead>
             <tr>
                 <th>Data</th>
                 <th>Descrição</th>
                 <th>Categoria</th>
-                <th class="text-end">Valor</th>
+                <th style="text-align:right;">Valor</th>
             </tr>
         </thead>
         <tbody>
@@ -65,21 +170,18 @@
                 <td>{{ t.data_f }}</td>
                 <td>{{ t.descricao }}</td>
                 <td>{{ t.categoria }}</td>
-                <td class="text-end fw-semibold {% if t.tipo == 'receita' %}text-success{% else %}text-danger{% endif %}">
-                    {% if t.tipo == 'receita' %}+{% else %}-{% endif %} R$ {{ "%.2f"|format(t.valor) }}
+                <td class="num {% if t.tipo == 'receita' %}positive{% else %}negative{% endif %}">
+                    {% if t.tipo == 'receita' %}+{% else %}−{% endif %} R$ {{ "%.2f"|format(t.valor) }}
                 </td>
             </tr>
             {% else %}
-            <tr>
-                <td colspan="4" class="text-center py-4 text-muted">Nenhum lançamento encontrado neste período.</td>
-            </tr>
+            <tr><td colspan="4" class="empty">Nenhum lançamento encontrado neste período.</td></tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <div class="text-center mt-5">
-        <p class="text-muted small">Fim do relatório.</p>
-    </div>
+    <p class="footer-note">Fim do relatório.</p>
+</div>
 
 </body>
 </html>
