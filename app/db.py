@@ -1,12 +1,14 @@
+import os
 import mysql.connector
+from dotenv import load_dotenv
+
+# Carrega as variáveis do arquivo .env
+load_dotenv()
 
 def get_db_connection():
-    # Cria e retorna a conexão com o banco do XAMPP
-    connection = mysql.connector.connect(
-        host='127.0.0.1',           
-        port=3306,                  
-        user='root',                
-        password='Lucasnascente8@',  
-        database='controle_financeiro'
+    return mysql.connector.connect(
+        host=os.getenv('DB_HOST', 'localhost'),
+        user=os.getenv('DB_USER', 'root'),
+        password=os.getenv('DB_PASSWORD', ''),
+        database=os.getenv('DB_NAME', 'controle_financeiro')
     )
-    return connection
