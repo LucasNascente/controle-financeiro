@@ -9,18 +9,16 @@ from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
 from app.db import get_db_connection
 
-# Isso avisa o Python para ler o arquivo .env
 load_dotenv()
 
 app = Flask(__name__, template_folder='app/templates')
-app.secret_key = 'e7Py$qFdYcfpcXUt8&99zucm2aiR*TDEwN$eeusjWB2jfaNqVx' 
-
+app.secret_key = os.getenv('SECRET_KEY')
 # --- CONFIGURAÇÕES DO FLASK-MAIL (GMAIL) ---
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = 'nascenteandrade@gmail.com'
-app.config['MAIL_PASSWORD'] = 'xohepcqjwzzrslhu' 
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD') 
 app.config['MAIL_DEFAULT_SENDER'] = ('Controle Financeiro', 'nascenteandrade@gmail.com')
 
 mail = Mail(app)
