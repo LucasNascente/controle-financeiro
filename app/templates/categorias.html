@@ -28,6 +28,8 @@
             <div class="card card-custom p-4 bg-white">
                 <h4 class="fw-bold mb-3">🏷️ Nova Categoria</h4>
                 <form action="{{ url_for('categorias') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Nome da Categoria</label>
                         <input type="text" name="nome" class="form-control" placeholder="Ex: Lazer, Saúde..." required>
@@ -59,8 +61,15 @@
                                 <td><div style="width: 20px; height: 20px; border-radius: 50%; background-color: {{ cat.cor }};"></div></td>
                                 <td class="fw-semibold">{{ cat.nome }}</td>
                                 <td class="text-end">
-                                    <a href="{{ url_for('deletar_categoria', id=cat.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir categoria?')">🗑️</a>
+                                    <form action="{{ url_for('deletar_categoria', id=cat.id) }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Tem certeza que deseja excluir esta categoria?')">🗑️</button>
+                                    </form>
                                 </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-3">Nenhuma categoria cadastrada.</td>
                             </tr>
                             {% endfor %}
                         </tbody>

@@ -32,6 +32,7 @@
                 {% endif %}
 
                 <form action="{{ url_for('perfil') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <input type="hidden" name="atualizar_dados" value="1">
                     <input type="hidden" name="email_exibicao" value="{{ usuario.email }}">
 
@@ -63,6 +64,8 @@
                 {% endif %}
 
                 <form action="{{ url_for('alterar_senha_perfil') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Senha Atual</label>
                         <input type="password" name="senha_atual" class="form-control" placeholder="Digite sua senha atual" required>
@@ -103,11 +106,12 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        Você tem certeza absoluta? Esta ação **não poderá ser desfeita** e todo o seu histórico financeiro será removido.
+        Você tem certeza absoluta? Esta ação <strong>não poderá ser desfeita</strong> e todo o seu histórico financeiro será removido.
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <form action="{{ url_for('excluir_conta') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <button type="submit" class="btn btn-danger fw-semibold">Sim, Excluir Tudo</button>
         </form>
       </div>

@@ -38,6 +38,7 @@
 </nav>
 
 <div class="container pb-5">
+    
     <div class="card card-custom p-3 bg-white mb-4">
         <form method="GET" action="{{ url_for('dashboard') }}" class="row g-3 align-items-center">
             <div class="col-md-3">
@@ -108,14 +109,17 @@
         </div>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="fw-bold mb-0">Histórico de Transações</h5>
-        <div class="d-flex gap-2">
-            <a href="{{ url_for('exportar_excel', mes=mes_atual, ano=ano_atual) }}" class="btn btn-sm btn-outline-success fw-semibold">📊 Baixar Excel</a>
-            <a href="{{ url_for('extrato', mes=mes_atual, ano=ano_atual) }}" target="_blank" class="btn btn-sm btn-outline-dark fw-semibold">📄 Gerar Extrato (PDF)</a>
+    <div class="card card-custom p-4 bg-white mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0">Histórico de Transações</h5>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('exportar_excel', mes=mes_atual, ano=ano_atual) }}" class="btn btn-sm btn-outline-success fw-semibold">📊 Baixar Excel</a>
+                <a href="{{ url_for('extrato', mes=mes_atual, ano=ano_atual) }}" target="_blank" class="btn btn-sm btn-outline-dark fw-semibold">📄 Gerar Extrato (PDF)</a>
+            </div>
         </div>
-    </div>
-            <table class="table table-hover align-middle">
+        
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>Data</th>
@@ -136,12 +140,17 @@
                         </td>
                         <td class="text-end">
                             <a href="{{ url_for('editar_transacao', id=t.id) }}" class="btn btn-sm btn-outline-warning">✏️</a>
-                            <a href="{{ url_for('deletar_transacao', id=t.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Tem certeza que deseja excluir esta transação?')">🗑️</a>
+                            
+                            <form action="{{ url_for('deletar_transacao', id=t.id) }}" method="POST" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Tem certeza que deseja excluir esta transação?')">🗑️</button>
+                            </form>
+                            
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-3">Nenhuma transação encontrada para os filtros selecionados.</td>
+                        <td colspan="5" class="text-center text-muted py-4">Nenhuma transação encontrada para os filtros selecionados.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

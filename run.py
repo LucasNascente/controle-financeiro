@@ -2,6 +2,7 @@ import os
 import csv
 import io
 import datetime
+from flask_wtf.csrf import CSRFProtect
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, session, redirect, url_for, Response
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -13,6 +14,7 @@ load_dotenv()
 
 app = Flask(__name__, template_folder='app/templates')
 app.secret_key = os.getenv('SECRET_KEY')
+
 # --- CONFIGURAÇÕES DO FLASK-MAIL (GMAIL) ---
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
@@ -20,6 +22,9 @@ app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = 'nascenteandrade@gmail.com'
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD') 
 app.config['MAIL_DEFAULT_SENDER'] = ('Controle Financeiro', 'nascenteandrade@gmail.com')
+
+# Proteção CSRF Global
+csrf = CSRFProtect(app)
 
 mail = Mail(app)
 s = URLSafeTimedSerializer(app.secret_key)
@@ -38,10 +43,12 @@ def login():
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email_digitado,))
-    usuario = cursor.fetchone()
-    cursor.close()
-    conn.close()
+    try:
+        cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email_digitado,))
+        usuario = cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
 
     if usuario and check_password_hash(usuario['senha'], senha_digitada):
         session['usuario_id'] = usuario['id']
@@ -64,41 +71,39 @@ def cadastro():
         
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        
-        cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
-        usuario_existente = cursor.fetchone()
-        
-        if usuario_existente:
+        try:
+            cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
+            usuario_existente = cursor.fetchone()
+            
+            if usuario_existente:
+                return render_template('cadastro.html', erro="Este e-mail já está cadastrado!")
+                
+            senha_hash = generate_password_hash(senha)
+            
+            cursor.execute("""
+                INSERT INTO usuarios (nome, email, senha, perfil) 
+                VALUES (%s, %s, %s, %s)
+            """, (nome, email, senha_hash, 'comum'))
+            conn.commit()
+            
+            novo_id = cursor.lastrowid
+            
+            categorias_padrao = [
+                ('Alimentação', '#ef4444'),
+                ('Moradia', '#3b82f6'),
+                ('Transporte', '#f59e0b'),
+                ('Lazer', '#8b5cf6'),
+                ('Salário / Receita', '#10b981')
+            ]
+            for cat_nome, cat_cor in categorias_padrao:
+                cursor.execute("INSERT INTO categorias (usuario_id, nome, cor) VALUES (%s, %s, %s)", (novo_id, cat_nome, cat_cor))
+                
+            cursor.execute("INSERT INTO contas (usuario_id, nome) VALUES (%s, %s)", (novo_id, 'Carteira Principal'))
+            conn.commit()
+        finally:
             cursor.close()
             conn.close()
-            return render_template('cadastro.html', erro="Este e-mail já está cadastrado!")
             
-        senha_hash = generate_password_hash(senha)
-        
-        cursor.execute("""
-            INSERT INTO usuarios (nome, email, senha, perfil) 
-            VALUES (%s, %s, %s, %s)
-        """, (nome, email, senha_hash, 'comum'))
-        conn.commit()
-        
-        novo_id = cursor.lastrowid
-        
-        categorias_padrao = [
-            ('Alimentação', '#ef4444'),
-            ('Moradia', '#3b82f6'),
-            ('Transporte', '#f59e0b'),
-            ('Lazer', '#8b5cf6'),
-            ('Salário / Receita', '#10b981')
-        ]
-        for cat_nome, cat_cor in categorias_padrao:
-            cursor.execute("INSERT INTO categorias (usuario_id, nome, cor) VALUES (%s, %s, %s)", (novo_id, cat_nome, cat_cor))
-            
-        cursor.execute("INSERT INTO contas (usuario_id, nome) VALUES (%s, %s)", (novo_id, 'Carteira Principal'))
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
         return render_template('login.html', sucesso="Conta criada com sucesso! Faça seu login.")
         
     return render_template('cadastro.html')
@@ -114,10 +119,12 @@ def esqueci_senha():
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
-        usuario = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        try:
+            cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
+            usuario = cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
 
         if not usuario:
             return render_template('esqueci_senha.html', erro="E-mail não encontrado no sistema!")
@@ -163,10 +170,12 @@ def redefinir_senha_token(token):
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("UPDATE usuarios SET senha = %s WHERE email = %s", (senha_hash, email))
-        conn.commit()
-        cursor.close()
-        conn.close()
+        try:
+            cursor.execute("UPDATE usuarios SET senha = %s WHERE email = %s", (senha_hash, email))
+            conn.commit()
+        finally:
+            cursor.close()
+            conn.close()
 
         return render_template('login.html', sucesso="Senha redefinida com sucesso! Faça seu login.")
 
@@ -181,8 +190,6 @@ def dashboard():
     usuario_id = session['usuario_id']
     hoje = datetime.date.today()
     
-    # Se 'mes' não for informado na URL, busca o mês atual. 
-    # Se 'mes' for 0, busca TODOS OS MESES.
     mes_selecionado = int(request.args.get('mes', hoje.month))
     ano_selecionado = int(request.args.get('ano', hoje.year))
     pesquisa = request.args.get('pesquisa', '').strip()
@@ -190,89 +197,91 @@ def dashboard():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # 1. Totais Receita/Despesa
-    query_totais = "SELECT tipo, SUM(valor) as total FROM transacoes WHERE usuario_id = %s"
-    params_totais = [usuario_id]
+    try:
+        # 1. Totais Receita/Despesa
+        query_totais = "SELECT tipo, SUM(valor) as total FROM transacoes WHERE usuario_id = %s"
+        params_totais = [usuario_id]
 
-    if mes_selecionado > 0:
-        query_totais += " AND MONTH(data_transacao) = %s"
-        params_totais.append(mes_selecionado)
-        
-    if ano_selecionado > 0:
-        query_totais += " AND YEAR(data_transacao) = %s"
-        params_totais.append(ano_selecionado)
-
-    query_totais += " GROUP BY tipo"
-    cursor.execute(query_totais, params_totais)
-    totais = cursor.fetchall()
-    
-    total_receitas = 0.0
-    total_despesas = 0.0
-    for t in totais:
-        if t['tipo'] == 'receita' and t['total'] is not None: 
-            total_receitas = float(t['total'])
-        elif t['tipo'] == 'despesa' and t['total'] is not None: 
-            total_despesas = float(t['total'])
+        if mes_selecionado > 0:
+            query_totais += " AND MONTH(data_transacao) = %s"
+            params_totais.append(mes_selecionado)
             
-    saldo_atual = total_receitas - total_despesas
+        if ano_selecionado > 0:
+            query_totais += " AND YEAR(data_transacao) = %s"
+            params_totais.append(ano_selecionado)
 
-    # 2. Dados do Gráfico (Despesas)
-    query_grafico = """
-        SELECT c.nome, c.cor, SUM(t.valor) as total
-        FROM transacoes t
-        JOIN categorias c ON t.categoria_id = c.id
-        WHERE t.usuario_id = %s AND t.tipo = 'despesa'
-    """
-    params_grafico = [usuario_id]
-
-    if mes_selecionado > 0:
-        query_grafico += " AND MONTH(t.data_transacao) = %s"
-        params_grafico.append(mes_selecionado)
+        query_totais += " GROUP BY tipo"
+        cursor.execute(query_totais, params_totais)
+        totais = cursor.fetchall()
         
-    if ano_selecionado > 0:
-        query_grafico += " AND YEAR(t.data_transacao) = %s"
-        params_grafico.append(ano_selecionado)
+        total_receitas = 0.0
+        total_despesas = 0.0
+        for t in totais:
+            if t['tipo'] == 'receita' and t['total'] is not None: 
+                total_receitas = float(t['total'])
+            elif t['tipo'] == 'despesa' and t['total'] is not None: 
+                total_despesas = float(t['total'])
+                
+        saldo_atual = total_receitas - total_despesas
 
-    query_grafico += " GROUP BY c.id, c.nome, c.cor"
-    cursor.execute(query_grafico, params_grafico)
-    despesas_raw = cursor.fetchall()
+        # 2. Dados do Gráfico (Despesas)
+        query_grafico = """
+            SELECT c.nome, c.cor, SUM(t.valor) as total
+            FROM transacoes t
+            JOIN categorias c ON t.categoria_id = c.id
+            WHERE t.usuario_id = %s AND t.tipo = 'despesa'
+        """
+        params_grafico = [usuario_id]
 
-    grafico_dados = []
-    for d in despesas_raw:
-        grafico_dados.append({
-            'nome': str(d['nome']),
-            'cor': str(d['cor']) if d['cor'] else '#2563eb',
-            'total': float(d['total']) if d['total'] is not None else 0.0
-        })
+        if mes_selecionado > 0:
+            query_grafico += " AND MONTH(t.data_transacao) = %s"
+            params_grafico.append(mes_selecionado)
+            
+        if ano_selecionado > 0:
+            query_grafico += " AND YEAR(t.data_transacao) = %s"
+            params_grafico.append(ano_selecionado)
 
-    # 3. Tabela de Transações
-    query_transacoes = """
-        SELECT t.id, t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
-        FROM transacoes t
-        JOIN categorias c ON t.categoria_id = c.id
-        WHERE t.usuario_id = %s
-    """
-    params_transacoes = [usuario_id]
+        query_grafico += " GROUP BY c.id, c.nome, c.cor"
+        cursor.execute(query_grafico, params_grafico)
+        despesas_raw = cursor.fetchall()
 
-    if mes_selecionado > 0:
-        query_transacoes += " AND MONTH(t.data_transacao) = %s"
-        params_transacoes.append(mes_selecionado)
+        grafico_dados = []
+        for d in despesas_raw:
+            grafico_dados.append({
+                'nome': str(d['nome']),
+                'cor': str(d['cor']) if d['cor'] else '#2563eb',
+                'total': float(d['total']) if d['total'] is not None else 0.0
+            })
 
-    if ano_selecionado > 0:
-        query_transacoes += " AND YEAR(t.data_transacao) = %s"
-        params_transacoes.append(ano_selecionado)
+        # 3. Tabela de Transações
+        query_transacoes = """
+            SELECT t.id, t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
+            FROM transacoes t
+            JOIN categorias c ON t.categoria_id = c.id
+            WHERE t.usuario_id = %s
+        """
+        params_transacoes = [usuario_id]
 
-    if pesquisa:
-        query_transacoes += " AND t.descricao LIKE %s"
-        params_transacoes.append(f"%{pesquisa}%")
+        if mes_selecionado > 0:
+            query_transacoes += " AND MONTH(t.data_transacao) = %s"
+            params_transacoes.append(mes_selecionado)
 
-    query_transacoes += " ORDER BY t.data_transacao DESC, t.id DESC"
-    cursor.execute(query_transacoes, params_transacoes)
-    lista_transacoes = cursor.fetchall()
+        if ano_selecionado > 0:
+            query_transacoes += " AND YEAR(t.data_transacao) = %s"
+            params_transacoes.append(ano_selecionado)
 
-    cursor.close()
-    conn.close()
-        
+        if pesquisa:
+            query_transacoes += " AND t.descricao LIKE %s"
+            params_transacoes.append(f"%{pesquisa}%")
+
+        query_transacoes += " ORDER BY t.data_transacao DESC, t.id DESC"
+        cursor.execute(query_transacoes, params_transacoes)
+        lista_transacoes = cursor.fetchall()
+
+    finally:
+        cursor.close()
+        conn.close()
+            
     return render_template('dashboard.html', 
                            receitas=total_receitas, 
                            despesas=total_despesas, 
@@ -293,21 +302,21 @@ def perfil():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    if request.method == 'POST' and 'atualizar_dados' in request.form:
-        novo_nome = request.form['nome']
-        cursor.execute("UPDATE usuarios SET nome = %s WHERE id = %s", (novo_nome, usuario_id))
-        conn.commit()
-        session['usuario_nome'] = novo_nome  
+    try:
+        if request.method == 'POST' and 'atualizar_dados' in request.form:
+            novo_nome = request.form['nome']
+            cursor.execute("UPDATE usuarios SET nome = %s WHERE id = %s", (novo_nome, usuario_id))
+            conn.commit()
+            session['usuario_nome'] = novo_nome  
+            return render_template('perfil.html', 
+                                   usuario={'nome': novo_nome, 'email': request.form['email_exibicao']}, 
+                                   sucesso_dados="Nome atualizado com sucesso!")
+
+        cursor.execute("SELECT id, nome, email FROM usuarios WHERE id = %s", (usuario_id,))
+        usuario = cursor.fetchone()
+    finally:
         cursor.close()
         conn.close()
-        return render_template('perfil.html', 
-                               usuario={'nome': novo_nome, 'email': request.form['email_exibicao']}, 
-                               sucesso_dados="Nome atualizado com sucesso!")
-
-    cursor.execute("SELECT id, nome, email FROM usuarios WHERE id = %s", (usuario_id,))
-    usuario = cursor.fetchone()
-    cursor.close()
-    conn.close()
 
     return render_template('perfil.html', usuario=usuario)
 
@@ -322,19 +331,19 @@ def alterar_senha_perfil():
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT senha, email, nome FROM usuarios WHERE id = %s", (usuario_id,))
-    usuario = cursor.fetchone()
+    try:
+        cursor.execute("SELECT senha, email, nome FROM usuarios WHERE id = %s", (usuario_id,))
+        usuario = cursor.fetchone()
 
-    if not check_password_hash(usuario['senha'], senha_atual):
+        if not check_password_hash(usuario['senha'], senha_atual):
+            return render_template('perfil.html', usuario=usuario, erro_senha="A senha atual está incorreta!")
+
+        nova_senha_hash = generate_password_hash(nova_senha)
+        cursor.execute("UPDATE usuarios SET senha = %s WHERE id = %s", (nova_senha_hash, usuario_id))
+        conn.commit()
+    finally:
         cursor.close()
         conn.close()
-        return render_template('perfil.html', usuario=usuario, erro_senha="A senha atual está incorreta!")
-
-    nova_senha_hash = generate_password_hash(nova_senha)
-    cursor.execute("UPDATE usuarios SET senha = %s WHERE id = %s", (nova_senha_hash, usuario_id))
-    conn.commit()
-    cursor.close()
-    conn.close()
 
     return render_template('perfil.html', usuario=usuario, sucesso_senha="Senha alterada com sucesso!")
 
@@ -347,15 +356,15 @@ def excluir_conta():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute("DELETE FROM transacoes WHERE usuario_id = %s", (usuario_id,))
-    cursor.execute("DELETE FROM categorias WHERE usuario_id = %s", (usuario_id,))
-    cursor.execute("DELETE FROM contas WHERE usuario_id = %s", (usuario_id,))
-    cursor.execute("DELETE FROM usuarios WHERE id = %s", (usuario_id,))
-
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        cursor.execute("DELETE FROM transacoes WHERE usuario_id = %s", (usuario_id,))
+        cursor.execute("DELETE FROM categorias WHERE usuario_id = %s", (usuario_id,))
+        cursor.execute("DELETE FROM contas WHERE usuario_id = %s", (usuario_id,))
+        cursor.execute("DELETE FROM usuarios WHERE id = %s", (usuario_id,))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
 
     session.clear()
     return redirect(url_for('index'))
@@ -368,28 +377,32 @@ def categorias():
     usuario_id = session['usuario_id']
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    if request.method == 'POST':
-        nome = request.form['nome']
-        cor = request.form['cor']
-        cursor.execute("INSERT INTO categorias (usuario_id, nome, cor) VALUES (%s, %s, %s)", (usuario_id, nome, cor))
-        conn.commit()
-        return redirect(url_for('categorias'))
-    cursor.execute("SELECT * FROM categorias WHERE usuario_id = %s ORDER BY nome ASC", (usuario_id,))
-    minhas_categorias = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    try:
+        if request.method == 'POST':
+            nome = request.form['nome']
+            cor = request.form['cor']
+            cursor.execute("INSERT INTO categorias (usuario_id, nome, cor) VALUES (%s, %s, %s)", (usuario_id, nome, cor))
+            conn.commit()
+            return redirect(url_for('categorias'))
+        cursor.execute("SELECT * FROM categorias WHERE usuario_id = %s ORDER BY nome ASC", (usuario_id,))
+        minhas_categorias = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
     return render_template('categorias.html', categorias=minhas_categorias)
 
-@app.route('/deletar_categoria/<int:id>')
+@app.route('/deletar_categoria/<int:id>', methods=['POST'])
 def deletar_categoria(id):
     if 'usuario_id' not in session:
         return redirect(url_for('index'))
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM categorias WHERE id = %s AND usuario_id = %s", (id, session['usuario_id']))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        cursor.execute("DELETE FROM categorias WHERE id = %s AND usuario_id = %s", (id, session['usuario_id']))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
     return redirect(url_for('categorias'))
 
 @app.route('/nova_transacao', methods=['GET', 'POST'])
@@ -399,25 +412,27 @@ def nova_transacao():
     usuario_id = session['usuario_id']
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    if request.method == 'POST':
-        descricao = request.form['descricao']
-        valor = float(request.form['valor'].replace(',', '.'))
-        tipo = request.form['tipo']
-        categoria_id = request.form['categoria_id']
-        conta_id = request.form['conta_id']
-        data_transacao = request.form['data_transacao']
-        cursor.execute("""
-            INSERT INTO transacoes (usuario_id, categoria_id, conta_id, descricao, valor, tipo, data_transacao) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (usuario_id, categoria_id, conta_id, descricao, valor, tipo, data_transacao))
-        conn.commit()
-        return redirect(url_for('dashboard'))
-    cursor.execute("SELECT * FROM categorias WHERE usuario_id = %s", (usuario_id,))
-    categorias = cursor.fetchall()
-    cursor.execute("SELECT * FROM contas WHERE usuario_id = %s", (usuario_id,))
-    contas = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    try:
+        if request.method == 'POST':
+            descricao = request.form['descricao']
+            valor = float(request.form['valor'].replace(',', '.'))
+            tipo = request.form['tipo']
+            categoria_id = request.form['categoria_id']
+            conta_id = request.form['conta_id']
+            data_transacao = request.form['data_transacao']
+            cursor.execute("""
+                INSERT INTO transacoes (usuario_id, categoria_id, conta_id, descricao, valor, tipo, data_transacao) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (usuario_id, categoria_id, conta_id, descricao, valor, tipo, data_transacao))
+            conn.commit()
+            return redirect(url_for('dashboard'))
+        cursor.execute("SELECT * FROM categorias WHERE usuario_id = %s", (usuario_id,))
+        categorias = cursor.fetchall()
+        cursor.execute("SELECT * FROM contas WHERE usuario_id = %s", (usuario_id,))
+        contas = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
     return render_template('nova_transacao.html', categorias=categorias, contas=contas)
 
 @app.route('/editar_transacao/<int:id>', methods=['GET', 'POST'])
@@ -427,42 +442,46 @@ def editar_transacao(id):
     usuario_id = session['usuario_id']
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    if request.method == 'POST':
-        descricao = request.form['descricao']
-        valor = float(request.form['valor'].replace(',', '.'))
-        tipo = request.form['tipo']
-        categoria_id = request.form['categoria_id']
-        conta_id = request.form['conta_id']
-        data_transacao = request.form['data_transacao']
-        cursor.execute("""
-            UPDATE transacoes 
-            SET descricao = %s, valor = %s, tipo = %s, categoria_id = %s, conta_id = %s, data_transacao = %s
-            WHERE id = %s AND usuario_id = %s
-        """, (descricao, valor, tipo, categoria_id, conta_id, data_transacao, id, usuario_id))
-        conn.commit()
-        return redirect(url_for('dashboard'))
-    cursor.execute("SELECT * FROM transacoes WHERE id = %s AND usuario_id = %s", (id, usuario_id))
-    transacao = cursor.fetchone()
-    if not transacao:
-        return redirect(url_for('dashboard'))
-    cursor.execute("SELECT * FROM categorias WHERE usuario_id = %s", (usuario_id,))
-    categorias = cursor.fetchall()
-    cursor.execute("SELECT * FROM contas WHERE usuario_id = %s", (usuario_id,))
-    contas = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    try:
+        if request.method == 'POST':
+            descricao = request.form['descricao']
+            valor = float(request.form['valor'].replace(',', '.'))
+            tipo = request.form['tipo']
+            categoria_id = request.form['categoria_id']
+            conta_id = request.form['conta_id']
+            data_transacao = request.form['data_transacao']
+            cursor.execute("""
+                UPDATE transacoes 
+                SET descricao = %s, valor = %s, tipo = %s, categoria_id = %s, conta_id = %s, data_transacao = %s
+                WHERE id = %s AND usuario_id = %s
+            """, (descricao, valor, tipo, categoria_id, conta_id, data_transacao, id, usuario_id))
+            conn.commit()
+            return redirect(url_for('dashboard'))
+        cursor.execute("SELECT * FROM transacoes WHERE id = %s AND usuario_id = %s", (id, usuario_id))
+        transacao = cursor.fetchone()
+        if not transacao:
+            return redirect(url_for('dashboard'))
+        cursor.execute("SELECT * FROM categorias WHERE usuario_id = %s", (usuario_id,))
+        categorias = cursor.fetchall()
+        cursor.execute("SELECT * FROM contas WHERE usuario_id = %s", (usuario_id,))
+        contas = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
     return render_template('editar_transacao.html', transacao=transacao, categorias=categorias, contas=contas)
 
-@app.route('/deletar_transacao/<int:id>')
+@app.route('/deletar_transacao/<int:id>', methods=['POST'])
 def deletar_transacao(id):
     if 'usuario_id' not in session:
         return redirect(url_for('index'))
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM transacoes WHERE id = %s AND usuario_id = %s", (id, session['usuario_id']))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        cursor.execute("DELETE FROM transacoes WHERE id = %s AND usuario_id = %s", (id, session['usuario_id']))
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
     return redirect(url_for('dashboard'))
 
 @app.route('/logout')
@@ -483,40 +502,36 @@ def extrato():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Buscar dados do usuário para o cabeçalho
-    cursor.execute("SELECT nome, email FROM usuarios WHERE id = %s", (usuario_id,))
-    usuario = cursor.fetchone()
+    try:
+        cursor.execute("SELECT nome, email FROM usuarios WHERE id = %s", (usuario_id,))
+        usuario = cursor.fetchone()
 
-    # Montar a consulta de transações baseada nos filtros
-    query = """
-        SELECT t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
-        FROM transacoes t
-        JOIN categorias c ON t.categoria_id = c.id
-        WHERE t.usuario_id = %s
-    """
-    params = [usuario_id]
+        query = """
+            SELECT t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
+            FROM transacoes t
+            JOIN categorias c ON t.categoria_id = c.id
+            WHERE t.usuario_id = %s
+        """
+        params = [usuario_id]
 
-    if mes_selecionado > 0:
-        query += " AND MONTH(t.data_transacao) = %s"
-        params.append(mes_selecionado)
-    if ano_selecionado > 0:
-        query += " AND YEAR(t.data_transacao) = %s"
-        params.append(ano_selecionado)
+        if mes_selecionado > 0:
+            query += " AND MONTH(t.data_transacao) = %s"
+            params.append(mes_selecionado)
+        if ano_selecionado > 0:
+            query += " AND YEAR(t.data_transacao) = %s"
+            params.append(ano_selecionado)
 
-    # Ordenar por data cronológica crescente (melhor para leitura de extrato)
-    query += " ORDER BY t.data_transacao ASC" 
-    cursor.execute(query, params)
-    transacoes = cursor.fetchall()
-    
-    cursor.close()
-    conn.close()
+        query += " ORDER BY t.data_transacao ASC" 
+        cursor.execute(query, params)
+        transacoes = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
 
-    # Calcular Totais
     total_receitas = sum(t['valor'] for t in transacoes if t['tipo'] == 'receita')
     total_despesas = sum(t['valor'] for t in transacoes if t['tipo'] == 'despesa')
     saldo = total_receitas - total_despesas
 
-    # Formatar o texto do período
     meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
     periodo = "Todos os Meses"
     if mes_selecionado > 0 and ano_selecionado > 0:
@@ -546,44 +561,41 @@ def exportar_excel():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    query = """
-        SELECT t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
-        FROM transacoes t
-        JOIN categorias c ON t.categoria_id = c.id
-        WHERE t.usuario_id = %s
-    """
-    params = [usuario_id]
+    try:
+        query = """
+            SELECT t.descricao, t.valor, t.tipo, DATE_FORMAT(t.data_transacao, '%d/%m/%Y') as data_f, c.nome as categoria
+            FROM transacoes t
+            JOIN categorias c ON t.categoria_id = c.id
+            WHERE t.usuario_id = %s
+        """
+        params = [usuario_id]
 
-    if mes_selecionado > 0:
-        query += " AND MONTH(t.data_transacao) = %s"
-        params.append(mes_selecionado)
-    if ano_selecionado > 0:
-        query += " AND YEAR(t.data_transacao) = %s"
-        params.append(ano_selecionado)
+        if mes_selecionado > 0:
+            query += " AND MONTH(t.data_transacao) = %s"
+            params.append(mes_selecionado)
+        if ano_selecionado > 0:
+            query += " AND YEAR(t.data_transacao) = %s"
+            params.append(ano_selecionado)
 
-    query += " ORDER BY t.data_transacao ASC"
-    cursor.execute(query, params)
-    transacoes = cursor.fetchall()
-    
-    cursor.close()
-    conn.close()
+        query += " ORDER BY t.data_transacao ASC"
+        cursor.execute(query, params)
+        transacoes = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
 
-    # Criar o arquivo CSV na memória
     output = io.StringIO()
-    writer = csv.writer(output, delimiter=';') # Ponto e Vírgula (padrão do Excel BR)
+    writer = csv.writer(output, delimiter=';')
 
-    # Escrever Cabeçalho
     writer.writerow(['Data', 'Descricao', 'Categoria', 'Tipo', 'Valor (R$)'])
 
-    # Escrever as linhas
     for t in transacoes:
         valor_formatado = f"{t['valor']:.2f}".replace('.', ',')
         writer.writerow([t['data_f'], t['descricao'], t['categoria'], t['tipo'].capitalize(), valor_formatado])
 
-    # Preparar a resposta de download
     output.seek(0)
     return Response(
-        output.getvalue().encode('utf-8-sig'), # utf-8-sig preserva acentos no Excel
+        output.getvalue().encode('utf-8-sig'),
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment;filename=relatorio_financeiro.csv"}
     )

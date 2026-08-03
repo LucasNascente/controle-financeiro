@@ -8,9 +8,9 @@
     <style>
         body { background-color: #fff; color: #000; font-family: Arial, sans-serif; }
         .cabecalho-extrato { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-        .tabela-extrato th { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; }
+        .tabela-extrato th { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         
-        /* Esconde o botão na hora de gerar o PDF */
+        /* Esconde os botões de navegação na hora de gerar o PDF/Imprimir */
         @media print {
             .no-print { display: none !important; }
         }
@@ -71,7 +71,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="4" class="text-center py-4">Nenhum lançamento encontrado neste período.</td>
+                <td colspan="4" class="text-center py-4 text-muted">Nenhum lançamento encontrado neste período.</td>
             </tr>
             {% endfor %}
         </tbody>
