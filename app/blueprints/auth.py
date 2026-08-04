@@ -49,6 +49,9 @@ def cadastro():
         email = request.form['email']
         senha = request.form['senha']
 
+        if len(senha) < 6:
+            return render_template('cadastro.html', erro="A senha precisa ter pelo menos 6 caracteres.")
+
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         try:
@@ -148,6 +151,10 @@ def redefinir_senha_token(token):
 
     if request.method == 'POST':
         nova_senha = request.form['nova_senha']
+
+        if len(nova_senha) < 6:
+            return render_template('redefinir_senha.html', token=token, erro="A senha precisa ter pelo menos 6 caracteres.")
+
         senha_hash = generate_password_hash(nova_senha)
 
         conn = get_db_connection()

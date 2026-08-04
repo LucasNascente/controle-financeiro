@@ -52,6 +52,9 @@ def alterar_senha_perfil():
         if not check_password_hash(usuario['senha'], senha_atual):
             return render_template('perfil.html', usuario=usuario, erro_senha="A senha atual está incorreta!")
 
+        if len(nova_senha) < 6:
+            return render_template('perfil.html', usuario=usuario, erro_senha="A nova senha precisa ter pelo menos 6 caracteres.")
+
         nova_senha_hash = generate_password_hash(nova_senha)
         cursor.execute("UPDATE usuarios SET senha = %s WHERE id = %s", (nova_senha_hash, usuario_id))
         conn.commit()
