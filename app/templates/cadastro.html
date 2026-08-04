@@ -16,7 +16,7 @@
 
         {% if erro %}<div class="alert alert-error">{{ erro }}</div>{% endif %}
 
-        <form action="{{ url_for('cadastro') }}" method="POST">
+        <form action="{{ url_for('auth.cadastro') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
             <div class="auth-field">
@@ -44,7 +44,7 @@
         </form>
 
         <div class="auth-links" style="justify-content:center;">
-            <span style="color:var(--text-faint);">Já tem uma conta?&nbsp;</span><a href="{{ url_for('index') }}">Fazer login</a>
+            <span style="color:var(--text-faint);">Já tem uma conta?&nbsp;</span><a href="{{ url_for('auth.index') }}">Fazer login</a>
         </div>
     </div>
 </div>

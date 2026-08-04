@@ -17,7 +17,7 @@
         {% if erro %}<div class="alert alert-error">{{ erro }}</div>{% endif %}
         {% if sucesso %}<div class="alert alert-success">{{ sucesso }}</div>{% endif %}
 
-        <form method="POST" action="{{ url_for('login') }}">
+        <form method="POST" action="{{ url_for('auth.login') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="auth-field">
                 <label>E-mail</label>
@@ -31,8 +31,8 @@
         </form>
 
         <div class="auth-links">
-            <a href="{{ url_for('cadastro') }}">Criar conta</a>
-            <a href="{{ url_for('esqueci_senha') }}">Esqueci minha senha</a>
+            <a href="{{ url_for('auth.cadastro') }}">Criar conta</a>
+            <a href="{{ url_for('auth.esqueci_senha') }}">Esqueci minha senha</a>
         </div>
     </div>
 </div>

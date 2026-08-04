@@ -399,6 +399,27 @@ table.ledger tbody tr:hover { background: var(--surface-hover); }
 .ledger .num.negative { color: var(--negative); }
 .ledger .actions { text-align: right; white-space: nowrap; }
 
+/* ---------- Pagination ---------- */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 18px;
+  margin-top: 6px;
+  border-top: 1px solid var(--border-hair);
+  flex-wrap: wrap;
+}
+.pagination-info {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.pagination .disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .cat-dot {
   display: inline-flex;
   align-items: center;

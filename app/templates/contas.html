@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% set active_page = 'contas' %}
+{% block title %}Contas · Controle Financeiro{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <div>
+        <p class="eyebrow">Organização</p>
+        <h1 class="page-title">Contas</h1>
+    </div>
+</div>
+
+{% if erro %}<div class="alert alert-error" style="max-width:800px;">{{ erro }}</div>{% endif %}
+
+<div class="grid-2" style="grid-template-columns: 1fr 1.6fr;">
+    <div class="card">
+        <h2 class="card-title">Nova conta</h2>
+        <form action="{{ url_for('contas.contas') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="auth-field">
+                <label>Nome da conta</label>
+                <input type="text" name="nome" placeholder="Ex: Conta Corrente, Poupança..." required style="width:100%;">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">Salvar conta</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title">Minhas contas</h2>
+        <div class="table-wrap">
+            <table class="ledger">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Transações</th>
+                        <th style="text-align:right;">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in contas %}
+                    <tr>
+                        <td style="font-weight:500;">{{ c.nome }}</td>
+                        <td style="color:var(--text-lo); font-family:var(--font-mono); font-size:13px;">{{ c.total_transacoes }}</td>
+                        <td class="actions">
+                            <form action="{{ url_for('contas.deletar_conta', id=c.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta conta?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <button type="submit" class="icon-btn danger" title="Excluir" aria-label="Excluir conta: {{ c.nome }}">✕</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3" class="empty-state">Nenhuma conta cadastrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p style="color:var(--text-faint); font-size:12.5px; margin:14px 0 0;">
+            Contas com transações vinculadas não podem ser excluídas, e você precisa manter pelo menos uma conta ativa.
+        </p>
+    </div>
+</div>
+{% endblock %}

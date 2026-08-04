@@ -13,7 +13,7 @@
 <div class="grid-2" style="grid-template-columns: 1fr 1.6fr;">
     <div class="card">
         <h2 class="card-title">Nova categoria</h2>
-        <form action="{{ url_for('categorias') }}" method="POST">
+        <form action="{{ url_for('categorias.categorias') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="auth-field">
                 <label>Nome da categoria</label>
@@ -44,9 +44,9 @@
                         <td><span class="swatch" style="display:inline-block; width:14px; height:14px; border-radius:50%; background-color:{{ cat.cor }};"></span></td>
                         <td style="font-weight:500;">{{ cat.nome }}</td>
                         <td class="actions">
-                            <form action="{{ url_for('deletar_categoria', id=cat.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta categoria?')">
+                            <form action="{{ url_for('categorias.deletar_categoria', id=cat.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta categoria?')">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                <button type="submit" class="icon-btn danger" title="Excluir">✕</button>
+                                <button type="submit" class="icon-btn danger" title="Excluir" aria-label="Excluir categoria: {{ cat.nome }}">✕</button>
                             </form>
                         </td>
                     </tr>

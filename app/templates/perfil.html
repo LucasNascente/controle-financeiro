@@ -8,7 +8,7 @@
         <p class="eyebrow">Conta</p>
         <h1 class="page-title">Meu perfil</h1>
     </div>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">← Voltar ao dashboard</a>
+    <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-ghost btn-sm">← Voltar ao dashboard</a>
 </div>
 
 <div class="grid-2">
@@ -17,7 +17,7 @@
 
         {% if sucesso_dados %}<div class="alert alert-success">{{ sucesso_dados }}</div>{% endif %}
 
-        <form action="{{ url_for('perfil') }}" method="POST">
+        <form action="{{ url_for('perfil.perfil') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <input type="hidden" name="atualizar_dados" value="1">
             <input type="hidden" name="email_exibicao" value="{{ usuario.email }}">
@@ -42,7 +42,7 @@
         {% if erro_senha %}<div class="alert alert-error">{{ erro_senha }}</div>{% endif %}
         {% if sucesso_senha %}<div class="alert alert-success">{{ sucesso_senha }}</div>{% endif %}
 
-        <form action="{{ url_for('alterar_senha_perfil') }}" method="POST">
+        <form action="{{ url_for('perfil.alterar_senha_perfil') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
             <div class="auth-field">
@@ -78,7 +78,7 @@
         </div>
         <div class="modal-box-footer">
             <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('modalExcluir').classList.remove('open')">Cancelar</button>
-            <form action="{{ url_for('excluir_conta') }}" method="POST">
+            <form action="{{ url_for('perfil.excluir_conta') }}" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button type="submit" class="btn btn-danger btn-sm">Sim, excluir tudo</button>
             </form>

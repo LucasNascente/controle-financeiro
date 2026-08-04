@@ -12,13 +12,13 @@
         <h1 class="page-title">Dashboard</h1>
     </div>
     <div style="display:flex; gap:10px;">
-        <a href="{{ url_for('exportar_excel', mes=mes_atual, ano=ano_atual) }}" class="btn btn-ghost btn-sm">Exportar CSV</a>
-        <a href="{{ url_for('extrato', mes=mes_atual, ano=ano_atual) }}" target="_blank" class="btn btn-ghost btn-sm">Gerar extrato</a>
-        <a href="{{ url_for('nova_transacao') }}" class="btn btn-primary btn-sm">+ Nova transação</a>
+        <a href="{{ url_for('relatorios.exportar_excel', mes=mes_atual, ano=ano_atual) }}" class="btn btn-ghost btn-sm">Exportar CSV</a>
+        <a href="{{ url_for('relatorios.extrato', mes=mes_atual, ano=ano_atual) }}" target="_blank" class="btn btn-ghost btn-sm">Gerar extrato</a>
+        <a href="{{ url_for('transacoes.nova_transacao') }}" class="btn btn-primary btn-sm">+ Nova transação</a>
     </div>
 </div>
 
-<form method="GET" action="{{ url_for('dashboard') }}" class="filter-bar">
+<form method="GET" action="{{ url_for('dashboard.dashboard') }}" class="filter-bar">
     <div class="field">
         <label>Mês</label>
         <select name="mes" onchange="this.form.submit()">
@@ -71,8 +71,8 @@
     <div class="card">
         <h2 class="card-title">Ações rápidas</h2>
         <div class="quick-actions">
-            <a href="{{ url_for('nova_transacao') }}" class="btn btn-primary">+ Nova transação</a>
-            <a href="{{ url_for('categorias') }}" class="btn btn-ghost">Gerenciar categorias</a>
+            <a href="{{ url_for('transacoes.nova_transacao') }}" class="btn btn-primary">+ Nova transação</a>
+            <a href="{{ url_for('categorias.categorias') }}" class="btn btn-ghost">Gerenciar categorias</a>
         </div>
     </div>
 </div>
@@ -105,10 +105,10 @@
                         {% if t.tipo == 'receita' %}+{% else %}−{% endif %}R$ {{ "%.2f"|format(t.valor) }}
                     </td>
                     <td class="actions">
-                        <a href="{{ url_for('editar_transacao', id=t.id) }}" class="icon-btn" title="Editar">✎</a>
-                        <form action="{{ url_for('deletar_transacao', id=t.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta transação?')">
+                        <a href="{{ url_for('transacoes.editar_transacao', id=t.id) }}" class="icon-btn" title="Editar" aria-label="Editar transação: {{ t.descricao }}">✎</a>
+                        <form action="{{ url_for('transacoes.deletar_transacao', id=t.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta transação?')">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                            <button type="submit" class="icon-btn danger" title="Excluir">✕</button>
+                            <button type="submit" class="icon-btn danger" title="Excluir" aria-label="Excluir transação: {{ t.descricao }}">✕</button>
                         </form>
                     </td>
                 </tr>
@@ -118,6 +118,20 @@
             </tbody>
         </table>
     </div>
+
+    {% if total_paginas and total_paginas > 1 %}
+    <nav class="pagination" aria-label="Paginação do histórico de transações">
+        <a class="btn btn-ghost btn-sm {% if pagina_atual <= 1 %}disabled{% endif %}"
+           aria-label="Página anterior"
+           href="{{ url_for('dashboard.dashboard', mes=mes_atual, ano=ano_atual, pesquisa=pesquisa_atual, pagina=pagina_atual-1) if pagina_atual > 1 else '#' }}">‹ Anterior</a>
+
+        <span class="pagination-info">Página {{ pagina_atual }} de {{ total_paginas }} · {{ total_transacoes }} transações</span>
+
+        <a class="btn btn-ghost btn-sm {% if pagina_atual >= total_paginas %}disabled{% endif %}"
+           aria-label="Próxima página"
+           href="{{ url_for('dashboard.dashboard', mes=mes_atual, ano=ano_atual, pesquisa=pesquisa_atual, pagina=pagina_atual+1) if pagina_atual < total_paginas else '#' }}">Próxima ›</a>
+    </nav>
+    {% endif %}
 </div>
 {% endblock %}
 

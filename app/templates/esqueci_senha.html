@@ -17,7 +17,7 @@
         {% if erro %}<div class="alert alert-error">{{ erro }}</div>{% endif %}
         {% if sucesso %}<div class="alert alert-success">{{ sucesso }}</div>{% endif %}
 
-        <form action="{{ url_for('esqueci_senha') }}" method="POST">
+        <form action="{{ url_for('auth.esqueci_senha') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="auth-field">
                 <label>E-mail cadastrado</label>
@@ -27,7 +27,7 @@
         </form>
 
         <div class="auth-links" style="justify-content:center;">
-            <a href="{{ url_for('index') }}">Voltar para o login</a>
+            <a href="{{ url_for('auth.index') }}">Voltar para o login</a>
         </div>
     </div>
 </div>

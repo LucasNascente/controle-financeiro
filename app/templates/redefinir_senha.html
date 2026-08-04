@@ -16,7 +16,7 @@
 
         {% if erro %}<div class="alert alert-error">{{ erro }}</div>{% endif %}
 
-        <form action="{{ url_for('redefinir_senha_token', token=token) }}" method="POST">
+        <form action="{{ url_for('auth.redefinir_senha_token', token=token) }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="auth-field">
                 <label>Nova senha</label>
@@ -32,7 +32,7 @@
         </form>
 
         <div class="auth-links" style="justify-content:center;">
-            <a href="{{ url_for('index') }}">Cancelar</a>
+            <a href="{{ url_for('auth.index') }}">Cancelar</a>
         </div>
     </div>
 </div>

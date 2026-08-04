@@ -8,10 +8,11 @@
         <p class="eyebrow">Movimentação</p>
         <h1 class="page-title">Editar transação</h1>
     </div>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">Cancelar e voltar</a>
+    <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-ghost btn-sm">Cancelar e voltar</a>
 </div>
 
 <div class="card" style="max-width: 560px;">
+    {% if erro %}<div class="alert alert-error">{{ erro }}</div>{% endif %}
     <form method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
@@ -48,7 +49,15 @@
             </select>
         </div>
 
-        <input type="hidden" name="conta_id" value="1">
+        <div class="auth-field">
+            <label>Conta</label>
+            <select name="conta_id" style="width:100%;">
+                {% for c in contas %}
+                    <option value="{{ c.id }}" {% if c.id == transacao.conta_id %}selected{% endif %}>{{ c.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
         <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center; margin-top:8px;">Atualizar transação</button>
     </form>
 </div>

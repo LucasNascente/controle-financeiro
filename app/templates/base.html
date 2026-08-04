@@ -21,16 +21,19 @@
         <div class="sidebar-brand"><span class="dot"></span> Controle Financeiro</div>
 
         <nav class="nav-group">
-            <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+            <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.dashboard') }}">
                 <span class="icon">&#9701;</span> Dashboard
             </a>
-            <a class="nav-link {% if active_page == 'nova_transacao' %}active{% endif %}" href="{{ url_for('nova_transacao') }}">
+            <a class="nav-link {% if active_page == 'nova_transacao' %}active{% endif %}" href="{{ url_for('transacoes.nova_transacao') }}">
                 <span class="icon">+</span> Nova transação
             </a>
-            <a class="nav-link {% if active_page == 'categorias' %}active{% endif %}" href="{{ url_for('categorias') }}">
+            <a class="nav-link {% if active_page == 'categorias' %}active{% endif %}" href="{{ url_for('categorias.categorias') }}">
                 <span class="icon">&#9671;</span> Categorias
             </a>
-            <a class="nav-link {% if active_page == 'perfil' %}active{% endif %}" href="{{ url_for('perfil') }}">
+            <a class="nav-link {% if active_page == 'contas' %}active{% endif %}" href="{{ url_for('contas.contas') }}">
+                <span class="icon">&#9707;</span> Contas
+            </a>
+            <a class="nav-link {% if active_page == 'perfil' %}active{% endif %}" href="{{ url_for('perfil.perfil') }}">
                 <span class="icon">&#9678;</span> Perfil
             </a>
         </nav>
@@ -40,7 +43,7 @@
                 <div class="avatar">{{ (session.get('usuario_nome') or '?')[0]|upper }}</div>
                 <div style="flex:1; min-width:0;">
                     <div class="name">{{ session.get('usuario_nome') }}</div>
-                    <a class="logout" href="{{ url_for('logout') }}">Sair</a>
+                    <a class="logout" href="{{ url_for('auth.logout') }}">Sair</a>
                 </div>
             </div>
         </div>
