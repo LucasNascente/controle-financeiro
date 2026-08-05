@@ -23,17 +23,23 @@ def categorias():
     finally:
         cursor.close()
         conn.close()
-    return render_template('categorias.html', categorias=minhas_categorias)
+    return render_template('categorias.html', categorias=minhas_categorias, erro=request.args.get('erro'))
 
 
 @categorias_bp.route('/deletar_categoria/<int:id>', methods=['POST'])
 def deletar_categoria(id):
     if 'usuario_id' not in session:
         return redirect(url_for('auth.index'))
+    usuario_id = session['usuario_id']
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("DELETE FROM categorias WHERE id = %s AND usuario_id = %s", (id, session['usuario_id']))
+        cursor.execute("SELECT COUNT(*) as total FROM transacoes WHERE categoria_id = %s AND usuario_id = %s", (id, usuario_id))
+        transacoes_vinculadas = cursor.fetchone()['total']
+        if transacoes_vinculadas > 0:
+            return redirect(url_for('categorias.categorias', erro="Essa categoria tem transações vinculadas e não pode ser excluída."))
+
+        cursor.execute("DELETE FROM categorias WHERE id = %s AND usuario_id = %s", (id, usuario_id))
         conn.commit()
     finally:
         cursor.close()
