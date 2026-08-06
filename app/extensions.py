@@ -1,5 +1,4 @@
 import os
-from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
 from itsdangerous import URLSafeTimedSerializer
 from dotenv import load_dotenv
@@ -8,9 +7,8 @@ from dotenv import load_dotenv
 # independente da ordem em que este módulo for importado por outro arquivo.
 load_dotenv()
 
-# Instâncias únicas, compartilhadas por todos os blueprints.
-# mail e csrf são "ligadas" à aplicação de verdade em app/__init__.py (init_app).
-mail = Mail()
+# Instância única, compartilhada por todos os blueprints.
+# csrf é "ligada" à aplicação de verdade em app/__init__.py (init_app).
 csrf = CSRFProtect()
 
 # O serializer usado para gerar/validar o token de recuperação de senha

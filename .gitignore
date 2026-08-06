@@ -2,3 +2,5 @@ venv/
 __pycache__/
 .env
 finance.db
+ca.pem
+schema.sql

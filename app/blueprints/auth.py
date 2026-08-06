@@ -1,9 +1,10 @@
+import os
+import requests
 from flask import Blueprint, render_template, request, session, redirect, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
-from flask_mail import Message
 from itsdangerous import SignatureExpired, BadTimeSignature
 from app.db import get_db_connection
-from app.extensions import mail, serializer
+from app.extensions import serializer
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -92,6 +93,45 @@ def cadastro():
     return render_template('cadastro.html')
 
 
+def _enviar_email_recuperacao(destinatario, nome, link_redefinicao):
+    """Envia o e-mail de recuperação de senha via API do Resend (HTTPS),
+    em vez de SMTP direto — necessário porque o plano gratuito do Render
+    bloqueia as portas de SMTP (25, 465, 587).
+
+    RESEND_FROM_EMAIL pode ficar em branco enquanto você não tiver um
+    domínio verificado no Resend: nesse caso, usamos o endereço de teste
+    onboarding@resend.dev, que só consegue enviar para o e-mail da sua
+    própria conta Resend (bom o bastante pra testar; depois de verificar
+    um domínio, atualize essa variável no Render pra enviar a qualquer
+    destinatário).
+    """
+    api_key = os.getenv('RESEND_API_KEY')
+    remetente = os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')
+
+    corpo_texto = f"""Olá, {nome}!
+
+Recebemos uma solicitação para redefinir a senha da sua conta no Controle Financeiro.
+
+Para criar uma nova senha, clique no link abaixo:
+{link_redefinicao}
+
+Este link é válido por 30 minutos. Se você não solicitou a alteração de senha, pode ignorar esta mensagem.
+"""
+
+    resposta = requests.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "from": f"Controle Financeiro <{remetente}>",
+            "to": [destinatario],
+            "subject": "Recuperação de Senha - Controle Financeiro",
+            "text": corpo_texto,
+        },
+        timeout=10,  # nunca deixa a requisição pendurada por muito tempo
+    )
+    resposta.raise_for_status()  # levanta erro se o Resend recusar o envio
+
+
 # --- ROTA SOLICITAR RECUPERAÇÃO DE SENHA (ENVIA E-MAIL) ---
 @auth_bp.route('/esqueci-senha', methods=['GET', 'POST'])
 def esqueci_senha():
@@ -117,17 +157,7 @@ def esqueci_senha():
         link_redefinicao = url_for('auth.redefinir_senha_token', token=token, _external=True)
 
         try:
-            msg = Message('Recuperação de Senha - Controle Financeiro', recipients=[email])
-            msg.body = f"""Olá, {usuario['nome']}!
-
-Recebemos uma solicitação para redefinir a senha da sua conta no Controle Financeiro.
-
-Para criar uma nova senha, clique no link abaixo:
-{link_redefinicao}
-
-Este link é válido por 30 minutos. Se você não solicitou a alteração de senha, pode ignorar esta mensagem.
-"""
-            mail.send(msg)
+            _enviar_email_recuperacao(email, usuario['nome'], link_redefinicao)
             return render_template('esqueci_senha.html', sucesso="E-mail de recuperação enviado! Verifique sua caixa de entrada (ou spam).")
         except Exception as e:
             print("Erro ao enviar e-mail:", e)
